@@ -73,3 +73,34 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+
+## JetBrains Rider specific
+.idea/
+*.sln.iml
+*.user
+*.suo
+*.sln.docstate
+
+## Rider's build and cache folders
+bin/
+obj/
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio specific
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstate
+
+# NuGet Packages
+*.nupkg
+packages/
+
