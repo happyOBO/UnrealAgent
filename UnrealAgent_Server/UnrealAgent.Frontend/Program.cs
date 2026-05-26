@@ -25,17 +25,31 @@ if (!Auth.IsApiKeyConfigured())
     Console.WriteLine("API Key 저장 완료!");
 }
 
-MessageCreateParams Parameters = new MessageCreateParams
+while (true)
 {
-    Model = "claude-opus-4-6",
-    MaxTokens = 1024,
-    Messages = [new() { Role = Role.User, Content = "안녕하세요! 간단히 자기소개 해주세요. " }]
-};
+    Console.Write("\n> ");
+    string? Input = Console.ReadLine();
 
-Message Response = await Auth.Client!.Messages.Create(Parameters);
+    if (string.IsNullOrWhiteSpace(Input)) 
+        continue;
+    
+    if (Input.Equals("exit", StringComparison.OrdinalIgnoreCase)) 
+        break;
 
-foreach (ContentBlock Block in Response.Content)
-{
-    if (Block.TryPickText(out var Text))
-        Console.WriteLine(Text.Text);
+    var Parameters = new MessageCreateParams
+    {
+        Model = "claude-opus-4-6",
+        MaxTokens = 1024,
+        Messages = [new() { Role = Role.User, Content = Input }]
+    };
+
+    await foreach (RawMessageStreamEvent Event in Auth.Client!.Messages.CreateStreaming(Parameters))
+    {
+        if (Event.TryPickContentBlockDelta(out RawContentBlockDeltaEvent? delta) && delta.Delta.TryPickText(out TextDelta? text))
+        {
+            Console.Write(text.Text);
+        }
+    }
+    
+    Console.WriteLine();
 }
