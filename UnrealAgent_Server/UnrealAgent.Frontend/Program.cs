@@ -4,14 +4,20 @@ using UnrealAgent.Backend.Agent;
 using UnrealAgent.Backend.Auth;
 using UnrealAgent.Backend.Conversation;
 using UnrealAgent.Backend.Core;
+using UnrealAgent.Backend.Prompt;
 
 ServiceCollection Services = new ServiceCollection();
 Services.AddSingleton<AuthConfig>();
-Services.AddSingleton<AgentSession>();
 
-ServiceProvider Provider = Services.BuildServiceProvider();
-AuthConfig Auth = Provider.GetRequiredService<AuthConfig>();
-AgentSession AgentSession = Provider.GetRequiredService<AgentSession>();
+Services.AddHttpClient("OAuth", C => C.Timeout = TimeSpan.FromSeconds(30));
+Services.AddSingleton<AuthConfig>();
+Services.AddSingleton<AgentSession>();
+Services.AddSingleton<PromptBuilder>();
+
+var Provider = Services.BuildServiceProvider();
+var Auth = Provider.GetRequiredService<AuthConfig>();
+var AgentSession = Provider.GetRequiredService<AgentSession>();
+var PromptBuilder = Provider.GetRequiredService<PromptBuilder>();
 
 Auth.Load();
 
@@ -47,17 +53,7 @@ while (true)
     MessageSpan CurrentMessageSpan = AgentSession.Conversation.AddMessageSpan(Input);
 
     // API 요청 파라미터 구성
-    MessageCreateParams Parameters = new MessageCreateParams
-    {
-        Model = "claude-opus-4-6",
-        MaxTokens = 1024,
-        Messages = AgentSession.Conversation.ToAnthropicMessages(),
-        Thinking = new ThinkingConfigAdaptive(),
-        OutputConfig = new OutputConfig()
-        {
-            Effort = Effort.High
-        }
-    };
+    MessageCreateParams Parameters = PromptBuilder.Build(AgentSession);
 
     // 스트리밍 응답 수신 및 출력
     ApiStreamSpan ApiStreamSpan = new ApiStreamSpan();
