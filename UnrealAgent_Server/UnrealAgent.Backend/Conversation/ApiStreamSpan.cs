@@ -11,6 +11,19 @@ namespace UnrealAgent.Backend.Conversation;
 /// </summary>
 public sealed class ApiStreamSpan
 {
+    /// <summary>
+    /// API 스트리밍 완료 후 다음 행동을 나타내는 판별 유니온입니다.
+    /// AgentLoop에서 패턴 매칭으로 루프를 제어합니다.
+    /// </summary>
+    public abstract record Result
+    {
+        /// <summary>응답/사고가 잘려서 이어서 생성해야 합니다. 도구 실행 없이 다음 API 호출로 이어갑니다.</summary>
+        public sealed record Continue(AssistantSpan CompletedSpan) : Result;
+
+        /// <summary>대화가 완료되었습니다.</summary>
+        public sealed record EndSpan(AssistantSpan CompletedSpan) : Result;
+    }
+    
     /// <summary>현재 진행 중인 블록의 종류와 상태입니다.</summary>
     private abstract record ActiveBlock 
     {
@@ -170,5 +183,19 @@ public sealed class ApiStreamSpan
         
         CurrentBlock = null;
         return null;
+    }
+    
+    /// <summary>
+    /// 스트리밍을 완료하고 AssistantSpan을 생성합니다.
+    /// 반환값으로 다음 행동(도구 실행, 이어서 호출, 종료)을 결정합니다.
+    /// </summary>
+    public Result Complete()
+    {
+        AssistantSpan CompleteSpan = new() 
+        {
+            AssistantBlocks = AssistantBlocks.ToList(),
+        };
+        
+        return new Result.EndSpan(CompleteSpan);
     }
 }
