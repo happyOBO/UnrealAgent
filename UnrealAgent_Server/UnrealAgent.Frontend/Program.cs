@@ -7,6 +7,7 @@ using UnrealAgent.Backend.Core;
 using UnrealAgent.Backend.Prompt;
 using UnrealAgent.Backend.Tool;
 using UnrealAgent.Backend.Tool.Tools;
+using Block = UnrealAgent.Backend.Core.Block;
 
 var Services = new ServiceCollection();
 
@@ -23,6 +24,7 @@ Services.AddSingleton<PromptBuilder>();
 
 // ── Tool 모듈 ──
 Services.AddSingleton<ToolRegistry>();
+Services.AddSingleton<ToolExecutor>();
 
 var Provider = Services.BuildServiceProvider();
 
@@ -30,6 +32,7 @@ var Auth = Provider.GetRequiredService<AuthConfig>();
 var AgentSession = Provider.GetRequiredService<AgentSession>();
 var PromptBuilder = Provider.GetRequiredService<PromptBuilder>();
 Provider.GetRequiredService<ToolRegistry>().DiscoverTools(typeof(WebSearch).Assembly);
+var ToolExecutor = Provider.GetRequiredService<ToolExecutor>();
 
 // ── 로직 ──
 
@@ -65,34 +68,63 @@ while (true)
     // 대화 히스토리에 사용자 입력 추가
     MessageSpan CurrentMessageSpan = AgentSession.Conversation.AddMessageSpan(Input);
 
-    // API 요청 파라미터 구성
-    MessageCreateParams Parameters = PromptBuilder.Build(AgentSession);
-
-    // 스트리밍 응답 수신 및 출력
-    ApiStreamSpan ApiStreamSpan = new ApiStreamSpan();
-    await foreach (RawMessageStreamEvent Event in Auth.Client!.Messages.CreateStreaming(Parameters))
+    // 에이전트 루프: 도구 실행이 필요하면 API를 반복 호출
+    bool bContinue = true;
+    while (bContinue)
     {
-        switch (ApiStreamSpan.Process(Event))
-        {
-            // case ChatEvent.Thinking Think:
-            //     Console.Write(Think.Content);
-            //     break;
+        // API 요청 파라미터 구성
+        MessageCreateParams Parameters = PromptBuilder.Build(AgentSession);
 
-            case ChatEvent.Text Txt:
-                Console.Write(Txt.Content);
+        // 스트리밍 응답 수신 및 출력
+        ApiStreamSpan ApiStreamSpan = new ApiStreamSpan();
+        await foreach (RawMessageStreamEvent Event in Auth.Client!.Messages.CreateStreaming(Parameters))
+        {
+            switch (ApiStreamSpan.Process(Event))
+            {
+                case ChatEvent.Text Txt:
+                    Console.Write(Txt.Content);
+                    break;
+            }
+        }
+
+        // 완료된 응답을 대화 히스토리에 저장
+        switch (ApiStreamSpan.Complete())
+        {
+            case ApiStreamSpan.Result.EndSpan { CompletedSpan: { } AssistantSpan }:
+            {
+                CurrentMessageSpan.AssistantSpans.Add(AssistantSpan);
+                bContinue = false;
+                
                 break;
+            }
+
+            case ApiStreamSpan.Result.ExecuteTools { CompletedSpan: { } AssistantSpan, ToolCalls: { } ToolCalls }:
+            {
+                CurrentMessageSpan.AssistantSpans.Add(AssistantSpan);
+
+                // 도구 실행
+                foreach (Block.ToolUse ToolCall in ToolCalls)
+                {
+                    await foreach (ChatEvent Evt in ToolExecutor.ExecuteAsync(ToolCall, AssistantSpan, AgentSession))
+                    {
+                        if (Evt is ChatEvent.ToolStart Tool)
+                            Console.WriteLine($"\n-- {Tool.Name} : {Tool.Input} 도구 사용 --");
+                    }
+                }
+
+                // 도구 결과를 포함하여 다음 API 호출로 이어감
+                break;
+            }
+
+            case ApiStreamSpan.Result.Continue { CompletedSpan: { } AssistantSpan }:
+            {
+                CurrentMessageSpan.AssistantSpans.Add(AssistantSpan);
+                
+                // 잘린 응답을 이어서 생성
+                break;
+            }
         }
     }
-
-    // 완료된 응답을 대화 히스토리에 저장
-    switch (ApiStreamSpan.Complete())
-    {
-        case ApiStreamSpan.Result.EndSpan { CompletedSpan: { } AssistantSpan }:
-        {
-            CurrentMessageSpan.AssistantSpans.Add(AssistantSpan);
-            break;
-        }
-    }
-
+    
     Console.WriteLine();
 }

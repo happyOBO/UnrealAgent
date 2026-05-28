@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Anthropic.Models.Messages;
 using Block = UnrealAgent.Backend.Core.Block;
 
@@ -11,9 +12,6 @@ public sealed class Conversation
 {
     /// <summary>메시지 구간(사용자 1턴) 목록입니다.</summary>
     private readonly List<MessageSpan> MessageSpans = [];
-    
-    /// <summary>첫 번째 사용자 메시지 텍스트를 반환합니다. 빌링 헤더 생성에 사용됩니다.</summary>
-    public string GetFirstUserText() => MessageSpans.FirstOrDefault()?.UserInput?.Text ?? "";
     
     /// <summary>MessageSpan을 추가하고 반환합니다.</summary>
     public MessageSpan AddMessageSpan(string Input)
@@ -42,7 +40,12 @@ public sealed class Conversation
             // Assistant 메세지 입니다.
             foreach (AssistantSpan Span in MessageSpan.AssistantSpans)
             {
+                // Assistant 대답
                 Messages.Add(ConvertAssistantBlocks(Span.AssistantBlocks));
+                
+                // Assistant 도구 실행 결과
+                if (Span.ToolExecutions.Count > 0)
+                    Messages.Add(ConvertToolResults(Span.ToolExecutions));
             }
         }
         
@@ -85,9 +88,31 @@ public sealed class Conversation
                     ContentBlocks.Add(new ThinkingBlockParam { Thinking = Content, Signature = Signature });
                     break;
                 }
+
+                case Block.ToolUse { Id: { } Id, Name: { } Name, InputJson: { } InputJson }:
+                {
+                    Dictionary<string, JsonElement> ParsedInput = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(InputJson) ?? new Dictionary<string, JsonElement>();
+                    ContentBlocks.Add(new ToolUseBlockParam { ID = Id, Name = Name, Input = ParsedInput });
+                    break;
+                }
             }
         }
         
         return new MessageParam { Role = Role.Assistant, Content = ContentBlocks };
+    }
+
+    /// <summary>
+    /// 도구 실행 결과를 Anthropic API user 메시지(ToolResult)로 변환합니다.
+    /// </summary>
+    private static MessageParam ConvertToolResults(IReadOnlyList<AssistantSpan.ToolExecution> Executions)
+    {
+        List<ContentBlockParam> ResultBlocks = Executions.Select(E => (ContentBlockParam)new ToolResultBlockParam
+        {
+            ToolUseID = E.ToolUseId,
+            Content = E.Output,
+            IsError = E.bIsError ? true : null
+        }).ToList();
+        
+        return new MessageParam { Role = Role.User, Content = ResultBlocks };
     }
 }
