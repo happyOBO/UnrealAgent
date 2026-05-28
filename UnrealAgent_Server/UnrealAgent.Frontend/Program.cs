@@ -5,22 +5,35 @@ using UnrealAgent.Backend.Auth;
 using UnrealAgent.Backend.Conversation;
 using UnrealAgent.Backend.Core;
 using UnrealAgent.Backend.Prompt;
+using UnrealAgent.Backend.Tool;
+using UnrealAgent.Backend.Tool.Tools;
 
-ServiceCollection Services = new ServiceCollection();
-Services.AddSingleton<AuthConfig>();
+var Services = new ServiceCollection();
 
 Services.AddHttpClient("OAuth", C => C.Timeout = TimeSpan.FromSeconds(30));
+
+// ── Auth 모듈 ──
 Services.AddSingleton<AuthConfig>();
+
+// ── Agent 모듈 (에이전트 루프 + 세션) ──
 Services.AddSingleton<AgentSession>();
+
+// ── Runtime 모듈 ──
 Services.AddSingleton<PromptBuilder>();
 
+// ── Tool 모듈 ──
+Services.AddSingleton<ToolRegistry>();
+
 var Provider = Services.BuildServiceProvider();
+
 var Auth = Provider.GetRequiredService<AuthConfig>();
 var AgentSession = Provider.GetRequiredService<AgentSession>();
 var PromptBuilder = Provider.GetRequiredService<PromptBuilder>();
+Provider.GetRequiredService<ToolRegistry>().DiscoverTools(typeof(WebSearch).Assembly);
+
+// ── 로직 ──
 
 Auth.Load();
-
 if (!Auth.IsApiKeyConfigured())
 {
     Console.Write("API Key를 입력하세요: ");
@@ -61,9 +74,9 @@ while (true)
     {
         switch (ApiStreamSpan.Process(Event))
         {
-            case ChatEvent.Thinking Think:
-                Console.Write(Think.Content);
-                break;
+            // case ChatEvent.Thinking Think:
+            //     Console.Write(Think.Content);
+            //     break;
 
             case ChatEvent.Text Txt:
                 Console.Write(Txt.Content);
