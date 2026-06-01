@@ -1,23 +1,19 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using Anthropic;
 
 namespace UnrealAgent.Backend.Auth;
 
-// <summary>
-// API 기반 인증 시스템
-// AuthhConfig.json 파일에서 API 키 로드하여, AhtropicClient 생성 
-// </summary>
-
+/// <summary>
+/// API Key 기반 인증 시스템입니다.
+/// AuthConfig.json 파일에서 키를 로드하고, AnthropicClient를 생성합니다.
+/// </summary>
 public sealed class AuthConfig
 {
-    // <summary>
-    // 설정 파일 경로
-    // </summary>
+    /// <summary>설정 파일 경로입니다.</summary>
     private readonly string ConfigPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".unrealagent",
-        "AuthConfig.json");
+        ".unrealagent", "AuthConfig.json");
     
     /// <summary>JSON 직렬화 옵션입니다.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
@@ -27,7 +23,7 @@ public sealed class AuthConfig
     
     /// <summary>현재 인증 정보로 구성된 Anthropic 클라이언트입니다.</summary>
     public AnthropicClient? Client { get; private set; }
-    
+
     /// <summary>
     /// API Key가 설정되어 있는지 확인합니다.
     /// </summary>
@@ -53,6 +49,7 @@ public sealed class AuthConfig
 
         JsonObject Root = new() { ["api_key"] = ApiKey };
         File.WriteAllText(ConfigPath, Root.ToJsonString(JsonOptions));
+        
         UpdateClient();
     }
     

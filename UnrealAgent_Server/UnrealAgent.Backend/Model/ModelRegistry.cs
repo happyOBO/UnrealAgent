@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using UnrealAgent.Backend.Model.Attributes;
 
 namespace UnrealAgent.Backend.Model;

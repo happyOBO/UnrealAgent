@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using Anthropic.Models.Messages;
 using UnrealAgent.Backend.Agent;
+using UnrealAgent.Backend.Auth;
 using UnrealAgent.Backend.Model;
 using UnrealAgent.Backend.Model.Models;
 using UnrealAgent.Backend.Tool;
@@ -31,17 +32,23 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
     /// <summary>
     /// Claude API 호출 파라미터를 생성합니다.
     /// </summary>
-    public MessageCreateParams Build(AgentSession Session) => new()
+    public MessageCreateParams Build(AgentSession Session)
     {
-        Model = ModelSettings.Model,
-        MaxTokens = ModelSettings.MaxTokens,
-        CacheControl = new CacheControlEphemeral(),
-        System = new List<TextBlockParam> { new() { Text = BuildSystemPrompt(Session) } },
-        Messages = Session.Conversation.ToAnthropicMessages(),
-        Tools = ToolRegistry.GetAllSchemas().Select(S => (ToolUnion)S).ToList(),
-        Thinking = ModelSettings.Model != Haiku45.ModelId ? ModelSettings.GetThinking() : null,
-        OutputConfig = ModelSettings.Model != Haiku45.ModelId ? ModelSettings.GetEffort() : null
-    };
+        return new()
+        {
+            Model = ModelSettings.Model,
+            MaxTokens = ModelSettings.MaxTokens,
+            CacheControl = new CacheControlEphemeral(),
+            System = new List<TextBlockParam>
+            {
+                new() { Text = BuildSystemPrompt(Session) }
+            },
+            Messages = Session.Conversation.ToAnthropicMessages(),
+            Tools = ToolRegistry.GetAllSchemas().Select(S => (ToolUnion)S).ToList(),
+            Thinking = ModelSettings.Model != Haiku45.ModelId ? ModelSettings.GetThinking() : null,
+            OutputConfig = ModelSettings.Model != Haiku45.ModelId ? ModelSettings.GetEffort() : null
+        };
+    }
     
     // ── 시스템 프롬프트 구성 ──
     

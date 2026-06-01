@@ -1,4 +1,4 @@
-namespace UnrealAgent.Backend.Model;
+﻿namespace UnrealAgent.Backend.Model;
 
 /// <summary>
 /// 모델 정의 인터페이스입니다.

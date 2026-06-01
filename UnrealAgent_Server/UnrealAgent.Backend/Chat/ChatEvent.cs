@@ -1,4 +1,4 @@
-namespace UnrealAgent.Backend.Chat;
+﻿namespace UnrealAgent.Backend.Chat;
 
 /// <summary>
 /// 에이전트에서 UI로 전달되는 스트리밍 이벤트입니다.

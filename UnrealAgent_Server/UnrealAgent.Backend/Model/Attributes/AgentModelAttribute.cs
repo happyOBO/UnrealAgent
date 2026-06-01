@@ -1,4 +1,4 @@
-namespace UnrealAgent.Backend.Model.Attributes;
+﻿namespace UnrealAgent.Backend.Model.Attributes;
 
 /// <summary>
 /// ModelRegistry가 자동 스캔하는 모델 마커 어트리뷰트입니다.

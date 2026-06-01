@@ -1,4 +1,4 @@
-using UnrealAgent.Backend.Model.Attributes;
+﻿using UnrealAgent.Backend.Model.Attributes;
 
 namespace UnrealAgent.Backend.Model.Models;
 

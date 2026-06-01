@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Anthropic.Models.Messages;
 using Block = UnrealAgent.Backend.Core.Block;
 
@@ -12,7 +12,10 @@ public sealed class Conversation
 {
     /// <summary>메시지 구간(사용자 1턴) 목록입니다.</summary>
     private readonly List<MessageSpan> MessageSpans = [];
-    
+
+    /// <summary>첫 번째 사용자 메시지 텍스트를 반환합니다. 빌링 헤더 생성에 사용됩니다.</summary>
+    public string GetFirstUserText() => MessageSpans.FirstOrDefault()?.UserInput?.Text ?? "";
+
     /// <summary>MessageSpan을 추가하고 반환합니다.</summary>
     public MessageSpan AddMessageSpan(UserInput Input)
     {

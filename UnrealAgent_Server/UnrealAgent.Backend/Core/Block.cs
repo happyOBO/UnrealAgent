@@ -1,4 +1,4 @@
-namespace UnrealAgent.Backend.Core;
+﻿namespace UnrealAgent.Backend.Core;
 
 /// <summary>
 /// 어시스턴트 응답의 콘텐츠 블록입니다.

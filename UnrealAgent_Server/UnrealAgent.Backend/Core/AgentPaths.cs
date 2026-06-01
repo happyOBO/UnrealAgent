@@ -1,4 +1,4 @@
-namespace UnrealAgent.Backend.Core;
+﻿namespace UnrealAgent.Backend.Core;
 
 /// <summary>
 /// 프로젝트 경로를 제공하는 정적 클래스입니다.

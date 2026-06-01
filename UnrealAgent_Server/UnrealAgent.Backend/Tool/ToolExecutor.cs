@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using UnrealAgent.Backend.Agent;
 using UnrealAgent.Backend.Chat;
 using UnrealAgent.Backend.Conversation;
