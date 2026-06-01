@@ -62,6 +62,38 @@ public sealed class ChatStore
                 break;
             }
 
+            case ChatEvent.ToolStart { ToolUseId: var ToolUseId, Name: var Name, Input: var Input }:
+            {
+                ThinkingComplete();
+
+                Messages.Add(new ChatUIMessage.Tool(Name, "")
+                {
+                    ToolUseId = ToolUseId,
+                    Input = Input,
+                    StartTime = DateTime.Now,
+                    bIsCompleted = false
+                });
+                
+                break;
+            }
+
+            case ChatEvent.ToolEnd { ToolUseId: var EndToolUseId, Name: var Name, Result: var Result }:
+            {
+                (int ToolIdx, ChatUIMessage.Tool? ToolMsg) = FindPendingTool(EndToolUseId, Name);
+
+                if (ToolIdx < 0)
+                    return;
+
+                Messages[ToolIdx] = ToolMsg! with
+                {
+                    Content = Result,
+                    ElapsedSeconds = (DateTime.Now - ToolMsg.StartTime).TotalSeconds,
+                    bIsCompleted = true
+                };
+
+                break;
+            }
+
             case ChatEvent.System { Content: var Content }:
             {
                 Messages.Add(new ChatUIMessage.System(Content));
@@ -88,5 +120,18 @@ public sealed class ChatStore
                 bIsCompleted = true
             };
         }
+    }
+    
+    /// <summary>tool_use ID가 일치하는 pending Tool 메시지의 인덱스와 객체를 찾습니다.</summary>
+    private (int Index, ChatUIMessage.Tool? Tool) FindPendingTool(string ToolUseId, string Name)
+    {
+        for (int I = Messages.Count - 1; I >= 0; I--)
+        {
+            if (Messages[I] is ChatUIMessage.Tool { bIsCompleted: false } T &&
+                (string.IsNullOrWhiteSpace(ToolUseId) ? T.Name == Name : T.ToolUseId == ToolUseId))
+                return (I, T);
+        }
+
+        return (-1, null);
     }
 }
