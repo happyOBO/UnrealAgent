@@ -1,5 +1,7 @@
 ﻿using UnrealAgent.Backend.Agent;
 using UnrealAgent.Backend.Auth;
+using UnrealAgent.Backend.Model;
+using UnrealAgent.Backend.Model.Models;
 using UnrealAgent.Backend.Prompt;
 using UnrealAgent.Backend.Tool;
 using UnrealAgent.Backend.Tool.Tools;
@@ -34,14 +36,20 @@ Builder.Services.AddSingleton<PromptBuilder>();
 Builder.Services.AddSingleton<ToolRegistry>();
 Builder.Services.AddSingleton<ToolExecutor>();
 
+// ── Claude 모델 레지스트리 & 런타임 설정 ──
+Builder.Services.AddSingleton<ModelRegistry>();
+Builder.Services.AddSingleton<ModelSettings>();
+
 // 여기까지 서비스 등록 단계. Build() 이후는 미들웨어/라우팅 설정 단계입니다.
 WebApplication App = Builder.Build();
 
-// ── Auth 설정 로드 ──
-App.Services.GetRequiredService<AuthConfig>().Load();
-
 // ── 어트리뷰트 기반 자동 스캔 ──
 App.Services.GetRequiredService<ToolRegistry>().DiscoverTools(typeof(WebSearch).Assembly);
+App.Services.GetRequiredService<ModelRegistry>().DiscoverModels(typeof(Opus46).Assembly);
+
+// ── 설정 로드 ──
+App.Services.GetRequiredService<AuthConfig>().Load();
+App.Services.GetRequiredService<ModelSettings>().Load();
 
 // ── 미들웨어 파이프라인 ──
 App.UseStaticFiles();

@@ -17,8 +17,14 @@
                 </textarea>
 
                 <!-- 하단 바: textarea 위에 떠 있는 전송 버튼 영역입니다. -->
-                <div class="flex items-center justify-end px-2 pb-2 absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#151515] via-[#151515] to-transparent pt-4">
+                <div class="flex items-center justify-between px-2 pb-2 absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#151515] via-[#151515] to-transparent pt-4">
 
+                    <!-- 하단바 좌측 -->
+                    <div class="flex items-center gap-2 pointer-events-auto">
+                        <!-- 모델 선택 -->
+                        <ModelSelector />
+                    </div>
+                    
                     <!-- 전송 버튼: 클릭 또는 Enter로 메시지를 보냅니다. -->
                     <button type="submit"
                             class="flex items-center justify-center size-7 rounded-sm transition-all active:scale-95 bg-[#0070e0] hover:bg-[#0060c0] text-white shadow-[0_0_10px_rgba(0,112,224,0.3)] active:shadow-inner">
@@ -29,23 +35,3 @@
         </form>
     </div>
 </div>
-
-@code {
-    /// <summary>메시지 전송 콜백입니다.</summary>
-    [Parameter] public EventCallback<string> OnSend { get; set; }
-
-    /// <summary>현재 입력 텍스트입니다.</summary>
-    private string InputText = "";
-
-    /// <summary>폼 제출 시 메시지를 전송합니다.</summary>
-    private async Task HandleSubmit()
-    {
-        string Trimmed = InputText.Trim();
-
-        if (string.IsNullOrEmpty(Trimmed))
-            return;
-
-        InputText = "";
-        await OnSend.InvokeAsync(Trimmed);
-    }
-}

@@ -6,4 +6,7 @@ public partial class Header
 {
     /// <summary>설정 버튼 클릭 콜백입니다.</summary>
     [Parameter] public EventCallback OnSettingsClick { get; set; }
+    
+    /// <summary> 플랜 사용량 버튼 클릭 콜백입니다.</summary>
+    [Parameter] public EventCallback OnUsageClick { get; set; }
 }
