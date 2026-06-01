@@ -1,6 +1,7 @@
 @page "/"
 
-<Header />
-<AgentTabBar/> 
+<Header OnSettingsClick="ToggleSettings" />
+<SettingsPanel bIsVisible="bShowSettings" OnClose="ToggleSettings" />
+<AgentTabBar/>
 <ChatMessages />
 <ChatInput />
