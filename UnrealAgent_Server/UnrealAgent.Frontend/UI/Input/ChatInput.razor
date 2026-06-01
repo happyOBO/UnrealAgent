@@ -25,11 +25,20 @@
                         <ModelSelector />
                     </div>
                     
-                    <!-- 전송 버튼: 클릭 또는 Enter로 메시지를 보냅니다. -->
-                    <button type="submit"
-                            class="flex items-center justify-center size-7 rounded-sm transition-all active:scale-95 bg-[#0070e0] hover:bg-[#0060c0] text-white shadow-[0_0_10px_rgba(0,112,224,0.3)] active:shadow-inner">
-                        <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
-                    </button>
+                    <!-- 우측: Thinking 토글, Effort 선택, 전송 버튼입니다. -->
+                    <div class="flex items-center gap-3 pointer-events-auto">
+                        
+                        <!-- Thinking 선택 -->
+                        <div class="flex items-center gap-3 bg-[#1a1a1a] px-2 py-1 rounded-sm border border-[#333]">
+                            <ThinkingToggle/>
+                        </div>
+
+                        <!-- 전송 버튼: 클릭 또는 Enter로 메시지를 보냅니다. -->
+                        <button type="submit"
+                                class="flex items-center justify-center size-7 rounded-sm transition-all active:scale-95 bg-[#0070e0] hover:bg-[#0060c0] text-white shadow-[0_0_10px_rgba(0,112,224,0.3)] active:shadow-inner">
+                            <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </form>
