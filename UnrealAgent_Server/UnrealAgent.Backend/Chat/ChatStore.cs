@@ -1,5 +1,3 @@
-using UnrealAgent.Backend.Core;
-
 namespace UnrealAgent.Backend.Chat;
 
 /// <summary>
@@ -11,23 +9,22 @@ public sealed class ChatStore
     /// <summary>UI에 표시되는 채팅 메시지 목록입니다.</summary>
     public List<ChatUIMessage> Messages { get; } = [];
     
-    /// <summary>현재 턴에서 응답 수신이 시작되었는지 여부입니다.</summary>
+    /// <summary>유저가 메시지를 보낸 뒤, AI 응답이 도착하기 전까지 true입니다.</summary>
     public bool bIsReceiving { get; private set; }
-    
+
     /// <summary>
     /// ChatEvent를 처리하여 UI 메시지를 업데이트합니다.
     /// </summary>
     public void Process(ChatEvent Evt)
     {
-        if (Evt is ChatEvent.Assistant or ChatEvent.Thinking)
-            bIsReceiving = true;
-        
+        bIsReceiving = Evt is ChatEvent.User;
+
         switch (Evt)
         {
             case ChatEvent.User { Content: var Content }:
             {
                 Messages.Add(new ChatUIMessage.User(Content));
-                
+
                 break;
             }
 
@@ -74,8 +71,7 @@ public sealed class ChatStore
             case ChatEvent.Done:
             {
                 ThinkingComplete();
-                bIsReceiving = false;
-                
+
                 break;
             }
         }

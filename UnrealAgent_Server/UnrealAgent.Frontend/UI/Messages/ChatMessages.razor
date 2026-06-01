@@ -15,6 +15,21 @@
         }
     }
     
+    @if (bIsReceiving)
+    {
+        <!-- 응답 생성 중 shimmer 인디케이터입니다. -->
+        <div class="flex gap-4 max-w-5xl mx-auto w-full z-10 msg-enter">
+            <div class="size-8 shrink-0 rounded bg-gradient-to-b from-[#333] to-[#1a1a1a] flex items-center justify-center shadow-lg relative overflow-hidden border border-[#444] mt-1">
+                <span class="font-sans font-black text-[#e0e0e0] text-sm leading-none drop-shadow-sm">U</span>
+            </div>
+            <div class="flex flex-col gap-2 w-full max-w-md mt-2 opacity-50">
+                <div class="h-2 rounded bg-white/5 shimmer-bg animate-shimmer w-3/4"></div>
+                <div class="h-2 rounded bg-white/5 shimmer-bg animate-shimmer w-full"></div>
+                <div class="h-2 rounded bg-white/5 shimmer-bg animate-shimmer w-5/6"></div>
+            </div>
+        </div>
+    }
+    
     <div id="messages-bottom"></div>
 </div>
 
