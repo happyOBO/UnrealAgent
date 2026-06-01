@@ -30,6 +30,10 @@ Builder.Services.AddSingleton<AuthConfig>();
 Builder.Services.AddSingleton<AgentSession>();
 Builder.Services.AddSingleton<AgentLoop>();
 
+// ── AgentRunner (메시지 큐 + 에이전트 루프 서비스) ──
+Builder.Services.AddSingleton<AgentRunner>();
+Builder.Services.AddHostedService(Sp => Sp.GetRequiredService<AgentRunner>());
+
 // ── Runtime 모듈 ──
 Builder.Services.AddSingleton<PromptBuilder>();
 

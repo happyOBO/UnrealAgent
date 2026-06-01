@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.Hosting;
 using UnrealAgent.Backend.Chat;
 using UnrealAgent.Backend.Conversation;
 
@@ -38,8 +38,11 @@ public sealed class AgentRunner(AgentSession Session) : BackgroundService
     /// <summary>
     /// 메시지를 큐에 추가하고 BackgroundService 루프를 깨웁니다.
     /// </summary>
-    public void EnqueueMessage(UserInput Input)
+    public async Task EnqueueMessage(UserInput Input)
     {
+        // 사용자 메세지 UI를 위해 추가
+        await DispatchEventAsync(new ChatEvent.User(Input.Text));
+        
         MessageQueue.Enqueue(Input);
         Signal.Release();
     }

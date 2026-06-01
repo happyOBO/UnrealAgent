@@ -2,7 +2,20 @@
     <!-- 그리드 패턴 배경 -->
     <div class="absolute inset-0 pointer-events-none opacity-[0.03]" style="background-image: linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px); background-size: 20px 20px;"></div>
 
-    <EmptyState />
+    <!-- 채팅 메세지 -->
+    @if (Messages.Count == 0)
+    {
+        <EmptyState />
+    }
+    else
+    {
+        @foreach (var Msg in Messages)
+        {
+            <MessageBubble UIMessage="Msg" />
+        }
+    }
     
     <div id="messages-bottom"></div>
 </div>
+
+

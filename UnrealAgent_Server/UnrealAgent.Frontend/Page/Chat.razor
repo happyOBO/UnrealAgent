@@ -3,5 +3,5 @@
 <Header OnSettingsClick="ToggleSettings"/>
 <SettingsPanel bIsVisible="bShowSettings" OnClose="ToggleSettings" />
 <AgentTabBar/> 
-<ChatMessages />
+<ChatMessages Messages="AgentRunner.Store.Messages" />
 <ChatInput OnSend="AgentRunner.EnqueueMessage"/>

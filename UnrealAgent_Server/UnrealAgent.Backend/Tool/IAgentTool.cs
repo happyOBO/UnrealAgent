@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using UnrealAgent.Backend.Agent;
 
 namespace UnrealAgent.Backend.Tool;
@@ -13,7 +13,7 @@ namespace UnrealAgent.Backend.Tool;
 /// </summary>
 public interface IAgentTool
 {
-    /// <summary>도구를 실행하고 결과를 반환a합니다.</summary>
+    /// <summary>도구를 실행하고 결과를 반환합니다.</summary>
     Task<ToolResult> ExecuteAsync(string InputJson, AgentSession Session, CancellationToken Ct = default);
 }
 

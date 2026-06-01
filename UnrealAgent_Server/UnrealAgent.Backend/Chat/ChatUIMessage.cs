@@ -1,4 +1,4 @@
-namespace UnrealAgent.Backend.Chat;
+﻿namespace UnrealAgent.Backend.Chat;
 
 /// <summary>
 /// UI에 표시되는 채팅 메시지입니다.
@@ -19,10 +19,7 @@ public abstract record ChatUIMessage
     //-----------------------------------------------------------------------------
 
     /// <summary>사용자 메시지입니다.</summary>
-    public sealed record User(string Content) : ChatUIMessage
-    {
-        
-    }
+    public sealed record User(string Content) : ChatUIMessage;
     
     //-----------------------------------------------------------------------------
     // Assistant

@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -71,8 +71,7 @@ public class WebSearch(AuthConfig Auth) : AgentTool<WebSearch.Input>
             {
                 new()
                 {
-                    Text =
-                        $"You are an assistant for performing a web search tool use. The current month is {CurrentMonth}."
+                    Text = $"You are an assistant for performing a web search tool use. The current month is {CurrentMonth}."
                 }
             },
             Messages = new List<MessageParam>

@@ -1,7 +1,8 @@
-using System.Text;
+﻿using System.Text;
 using Anthropic.Models.Messages;
 using UnrealAgent.Backend.Agent;
 using UnrealAgent.Backend.Model;
+using UnrealAgent.Backend.Model.Models;
 using UnrealAgent.Backend.Tool;
 
 namespace UnrealAgent.Backend.Prompt;
@@ -38,8 +39,8 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
         System = new List<TextBlockParam> { new() { Text = BuildSystemPrompt(Session) } },
         Messages = Session.Conversation.ToAnthropicMessages(),
         Tools = ToolRegistry.GetAllSchemas().Select(S => (ToolUnion)S).ToList(),
-        Thinking = ModelSettings.GetThinking(),
-        OutputConfig = ModelSettings.GetEffort()
+        Thinking = ModelSettings.Model != Haiku45.ModelId ? ModelSettings.GetThinking() : null,
+        OutputConfig = ModelSettings.Model != Haiku45.ModelId ? ModelSettings.GetEffort() : null
     };
     
     // ── 시스템 프롬프트 구성 ──
