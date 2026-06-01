@@ -28,6 +28,7 @@ Builder.Services.AddSingleton<AuthConfig>();
 
 // ── Agent 모듈 (에이전트 루프 + 세션) ──
 Builder.Services.AddSingleton<AgentSession>();
+Builder.Services.AddSingleton<AgentLoop>();
 
 // ── Runtime 모듈 ──
 Builder.Services.AddSingleton<PromptBuilder>();
