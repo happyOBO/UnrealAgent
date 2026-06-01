@@ -1,0 +1,11 @@
+@using UnrealAgent.Backend.Chat
+
+@* 메시지 타입에 따라 적절한 렌더링 컴포넌트로 분기합니다. *@
+@switch (UIMessage)
+{
+    case ChatUIMessage.User UserMsg:
+    {
+        <UserMessage Message="UserMsg" />
+        break;
+    }
+}
