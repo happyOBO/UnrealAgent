@@ -1,7 +1,7 @@
 using Anthropic.Models.Messages;
 using UnrealAgent.Backend.Auth;
+using UnrealAgent.Backend.Chat;
 using UnrealAgent.Backend.Conversation;
-using UnrealAgent.Backend.Core;
 using UnrealAgent.Backend.Prompt;
 using UnrealAgent.Backend.Tool;
 using Block = UnrealAgent.Backend.Core.Block;
