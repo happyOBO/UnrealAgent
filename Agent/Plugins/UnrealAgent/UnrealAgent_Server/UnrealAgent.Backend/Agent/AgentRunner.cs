@@ -21,7 +21,7 @@ public sealed class AgentRunner(AgentSession Session) : BackgroundService
     private readonly SemaphoreSlim Signal = new(0);
     
     /// <summary>ChatEvent 발생 시 UI 스레드에서 처리할 이벤트입니다.</summary>
-    public event Func<ChatEvent, Task>? OnChatEvent;
+    public Func<ChatEvent, Task>?  OnChatEvent;
     
     protected override async Task ExecuteAsync(CancellationToken Ct)
     {
