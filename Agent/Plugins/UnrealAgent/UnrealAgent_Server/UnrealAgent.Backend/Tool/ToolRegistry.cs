@@ -5,7 +5,9 @@ using System.Text.Json.Serialization;
 using Anthropic.Models.Messages;
 using Microsoft.Extensions.DependencyInjection;
 using UnrealAgent.Backend.Agent;
+using UnrealAgent.Backend.Mcp;
 using UnrealAgent.Backend.Tool.Attributes;
+using UnrealAgent.Backend.Tool.Tools;
 
 namespace UnrealAgent.Backend.Tool;
 using AnthropicTool = Anthropic.Models.Messages.Tool;
@@ -81,6 +83,36 @@ public sealed class ToolRegistry(IServiceProvider ServiceProvider)
         }
     }
 
+    /// <summary>
+    /// MCP 서버에서 받은 도구를 동적으로 등록합니다.
+    /// 도구 이름은 "mcp__{서버이름}__{도구이름}" 형식으로 등록됩니다.
+    /// </summary>
+    public void RegisterMcpTools(string ServerName, McpClient Client, List<McpToolDefinition> McpTools)
+    {
+        foreach (McpToolDefinition Def in McpTools)
+        {
+            string RegistryName = $"mcp__{ServerName}__{Def.Name}";
+
+            // MCP에서 받은 inputSchema를 그대로 Anthropic InputSchema로 변환
+            InputSchema Schema = Def.InputSchema.Deserialize<InputSchema>() ?? new()
+            {
+                Properties = new Dictionary<string, JsonElement>(),
+                Required = new List<string>()
+            };
+
+            AnthropicTool ToolSchema = new()
+            {
+                Name = RegistryName,
+                Description = Def.Description,
+                InputSchema = Schema
+            };
+
+            McpProxyTool Proxy = new(Client, Def.Name);
+
+            Tools[RegistryName] = new ToolEntry(Proxy, ToolSchema);
+        }
+    }
+    
     /// <summary>
     /// AgentTool의 TInput 레코드에서 InputSchema를 자동 생성합니다.
     /// [Description] 어트리뷰트로 파라미터 설명을, [JsonPropertyName]으로 JSON 키를 지정합니다.

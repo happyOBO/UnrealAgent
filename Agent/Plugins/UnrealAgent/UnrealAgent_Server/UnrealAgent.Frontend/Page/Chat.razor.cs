@@ -26,12 +26,12 @@ public partial class Chat : IAsyncDisposable
         AgentRunner.OnChatEvent = OnChatEvent;
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if(AgentRunner.OnChatEvent == OnChatEvent)
+        if (AgentRunner.OnChatEvent == OnChatEvent)
             AgentRunner.OnChatEvent = null;
-        
-        await ValueTask.CompletedTask;
+
+        return ValueTask.CompletedTask;
     }
     
     /// <summary>

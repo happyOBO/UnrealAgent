@@ -20,8 +20,8 @@ public sealed class AgentRunner(AgentSession Session) : BackgroundService
     /// <summary>큐에 메시지가 도착하면 BackgroundService 루프를 깨우는 시그널입니다.</summary>
     private readonly SemaphoreSlim Signal = new(0);
     
-    /// <summary>ChatEvent 발생 시 UI 스레드에서 처리할 이벤트입니다.</summary>
-    public Func<ChatEvent, Task>?  OnChatEvent;
+    /// <summary>ChatEvent 발생 시 UI 스레드에서 처리할 콜백입니다. 최신 구독자만 유지합니다.</summary>
+    public Func<ChatEvent, Task>? OnChatEvent { get; set; }
     
     protected override async Task ExecuteAsync(CancellationToken Ct)
     {
