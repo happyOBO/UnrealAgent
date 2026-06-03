@@ -1,4 +1,8 @@
 ﻿<Solution>
-  <Project Path="UnrealAgent.Backend\UnrealAgent.Backend.csproj" Type="Classic C#" />
-  <Project Path="UnrealAgent.Frontend\UnrealAgent.Frontend.csproj" Type="Classic C#" />
+  <Project Path="UnrealAgent.Backend\UnrealAgent.Backend.csproj" Type="Classic C#">
+    <Configuration Solution="Debug|Any CPU" Project="Release|Any CPU" />
+  </Project>
+  <Project Path="UnrealAgent.Frontend\UnrealAgent.Frontend.csproj" Type="Classic C#">
+    <Configuration Solution="Debug|Any CPU" Project="Release|Any CPU" />
+  </Project>
 </Solution>
