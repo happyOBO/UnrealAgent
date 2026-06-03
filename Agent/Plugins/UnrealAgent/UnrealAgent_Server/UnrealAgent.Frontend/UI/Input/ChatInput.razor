@@ -1,3 +1,5 @@
+@inherits JsComponentBase
+
 <!-- 메시지 입력 영역입니다. -->
 <div class="p-4 bg-[#1b1b1b] border-t border-[#2a2a2a] relative z-20">
     <div class="max-w-4xl mx-auto">
@@ -9,7 +11,8 @@
             <div class="relative bg-[#151515] rounded-md border border-[#333] shadow-xl focus-within:ring-1 focus-within:ring-[#0070e0] focus-within:border-[#0070e0] transition-all">
 
                 <!-- 텍스트 입력: oninput으로 실시간 바인딩합니다. 높이 고정, 내부 스크롤합니다. -->
-                <textarea @bind="InputText"
+                <textarea @ref="TextAreaRef"
+                          @bind="InputText"
                           @bind:event="oninput"
                           class="w-full bg-transparent border-none text-[14px] text-[#e0e0e0] placeholder-[#555] py-4 pb-12 px-3 focus:ring-0 resize-none h-[120px] overflow-y-auto font-normal tracking-wide leading-relaxed"
                           placeholder="메시지를 입력하세요..."

@@ -33,6 +33,7 @@ public partial class ToolBlock : IDisposable
     {
         "web_search" => WebSearchBlock.GetInfo(Message),
         "web_fetch"  => WebFetchBlock.GetInfo(Message),
+        _ when CodeBlock.IsCodeTool(Message.Name) => CodeBlock.GetInfo(Message),
         _            => new("terminal", "Tool:", "font-mono", Message.Name)
     };
 

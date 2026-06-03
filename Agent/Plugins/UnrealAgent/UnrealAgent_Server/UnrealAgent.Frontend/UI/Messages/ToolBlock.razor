@@ -27,19 +27,17 @@
 
         <!-- 도구 이름에 따라 적절한 렌더러를 선택합니다. -->
         <div class="ml-11 mt-2">
-            @switch (Message.Name)
+            @if (Message.Name is "web_search")
             {
-                case "web_search":
-                {
-                    <WebSearchBlock Message="Message"/>
-                    break;
-                }
-
-                case "web_fetch":
-                {
-                    <WebFetchBlock Message="Message"/>
-                    break;
-                }
+                <WebSearchBlock Message="Message"/>
+            }
+            else if (Message.Name is "web_fetch")
+            {
+                <WebFetchBlock Message="Message"/>
+            }
+            else if (CodeBlock.IsCodeTool(Message.Name))
+            {
+                <CodeBlock Message="Message"/>
             }
         </div>
     </details>

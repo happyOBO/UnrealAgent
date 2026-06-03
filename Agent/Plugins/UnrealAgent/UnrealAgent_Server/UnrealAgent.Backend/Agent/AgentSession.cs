@@ -11,9 +11,7 @@ public sealed class AgentSession(AgentLoop Loop)
 {
     /// <summary>이 세션의 대화 히스토리입니다.</summary>
     public Conversation.Conversation Conversation { get; } = new();
-
-    /// <summary>
-    /// 사용자 메시지를 처리합니다.
-    /// </summary>
+    
+    /// <summary>사용자 메시지를 처리합니다. </summary>
     public IAsyncEnumerable<ChatEvent> ProcessMessage(UserInput Input) => Loop.RunAsync(Input, this);
 }
