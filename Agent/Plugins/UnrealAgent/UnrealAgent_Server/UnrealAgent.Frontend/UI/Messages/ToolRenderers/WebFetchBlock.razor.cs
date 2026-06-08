@@ -17,8 +17,12 @@ public partial class WebFetchBlock : ComponentBase
     public static ToolMeta GetInfo(ChatUIMessage.Tool Msg)
         => new("language", "Web Fetch", "font-mono", GetDomain(Msg));
 
+    /// <summary>권한 다이얼로그에 표시할 요약입니다.</summary>
+    public static string GetPermissionSummary(string InputJson)
+        => ChatUIMessage.Tool.GetInputField(InputJson, "url");
+
     /// <summary>입력 JSON에서 원본 URL을 가져옵니다.</summary>
-    private string FetchUrl => Message.GetInputField("url");
+    private string FetchUrl => ChatUIMessage.Tool.GetInputField(Message.Input, "url");
 
     /// <summary>URL의 도메인을 추출합니다.</summary>
     private string Domain => GetDomain(Message);
@@ -26,7 +30,7 @@ public partial class WebFetchBlock : ComponentBase
     /// <summary>입력 JSON에서 URL의 도메인을 추출합니다.</summary>
     private static string GetDomain(ChatUIMessage.Tool Msg)
     {
-        string Url = Msg.GetInputField("url");
+        string Url = ChatUIMessage.Tool.GetInputField(Msg.Input, "url");
         return Uri.TryCreate(Url, UriKind.Absolute, out Uri? Parsed) ? Parsed.Host : Url;
     }
 }

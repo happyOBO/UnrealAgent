@@ -4,4 +4,11 @@
 <SettingsPanel bIsVisible="bShowSettings" OnClose="ToggleSettings" />
 <AgentTabBar/> 
 <ChatMessages Messages="AgentRunner.Store.Messages" bIsReceiving="AgentRunner.Store.bIsReceiving" />
-<ChatInput OnSend="AgentRunner.EnqueueMessage"/>
+<div class="relative shrink-0">
+    @if (PendingPermission is { } PermReq)
+    {
+        <PermissionDialog Request="PermReq" OnDecision="HandlePermissionDecision" />
+    }
+    
+    <ChatInput OnSend="AgentRunner.EnqueueMessage"/>
+</div>

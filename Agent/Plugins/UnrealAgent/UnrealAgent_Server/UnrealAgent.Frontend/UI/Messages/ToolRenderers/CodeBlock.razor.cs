@@ -67,7 +67,11 @@ public partial class CodeBlock : JsComponentBase
 
     /// <summary>ToolBlock summary 바에 표시할 메타데이터를 반환합니다.</summary>
     public static ToolBlock.ToolMeta GetInfo(ChatUIMessage.Tool Msg)
-        => new("code", Msg.Name, "font-mono", Msg.GetInputField("purpose"));
+        => new("code", Msg.Name, "font-mono", ChatUIMessage.Tool.GetInputField(Msg.Input, "purpose"));
+
+    /// <summary>권한 다이얼로그에 표시할 요약입니다.</summary>
+    public static string GetPermissionSummary(string InputJson)
+        => ChatUIMessage.Tool.GetInputField(InputJson, "purpose");
 
     //--------------------------------------------------------------------------
     // 라이프사이클
