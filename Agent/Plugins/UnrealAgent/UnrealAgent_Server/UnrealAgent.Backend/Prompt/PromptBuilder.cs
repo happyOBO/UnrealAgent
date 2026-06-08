@@ -2,6 +2,7 @@
 using Anthropic.Models.Messages;
 using UnrealAgent.Backend.Agent;
 using UnrealAgent.Backend.Auth;
+using UnrealAgent.Backend.Mode;
 using UnrealAgent.Backend.Model;
 using UnrealAgent.Backend.Model.Models;
 using UnrealAgent.Backend.Tool;
@@ -25,6 +26,7 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
         Proactiveness  = 1 << 3,
         ToneAndStyle   = 1 << 4,
         OutputEfficiency = 1 << 5,
+        ModeOverride   = 1 << 6,
     }
     
     // ── API 파라미터 생성 ──
@@ -63,6 +65,8 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
     /// <summary>각 섹션 메서드를 호출하고 결과를 결합하여 프롬프트 문자열을 생성합니다.</summary>
     private string BuildInternal(Section Skip, AgentSession? Session)
     {
+        AgentMode Mode = Session?.Mode ?? AgentMode.Normal;
+      
         StringBuilder Sb = new();
         
         if (!Skip.HasFlag(Section.Identity))
@@ -70,6 +74,14 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
         
         if (!Skip.HasFlag(Section.System))
           Sb.AppendLine(System());
+        
+        if (!Skip.HasFlag(Section.ModeOverride))
+        {
+            string? ModeSec = ModeSection(Mode);
+              
+            if (ModeSec is not null)
+              Sb.AppendLine(ModeSec);
+        }
         
         if (!Skip.HasFlag(Section.DoingTasks))
           Sb.AppendLine(DoingTasks());
@@ -180,5 +192,127 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
 
                                                 If you can say it in one sentence, do not use three.
                                                 """;
+    
+    /// <summary>
+    /// 모드별 시스템 프롬프트 오버라이드를 반환합니다. Normal 모드는 null입니다.
+    /// </summary>
+    private static string? ModeSection(AgentMode Mode) => Mode switch
+    {
+        AgentMode.Plan => """
+            <system-reminder>
+            Plan mode is active. The user indicated that they do not want you to execute yet --
+            you MUST NOT run any tools or otherwise make any changes to the system.
+            This supersedes any other instructions you have received.
+
+            You are now acting as a level design architect and planning specialist.
+            Your ONLY role is to analyze the request, explore the current editor state
+            from prior tool results in the conversation, and produce a structured
+            implementation plan. You must NOT execute any actions.
+
+            ## Hard Constraints
+
+            - NEVER call any tool. All tool calls will require user approval.
+            - NEVER modify actors, assets, properties, or any editor state.
+            - NEVER run Python scripts or execute any commands.
+            - If you need information that is not available from prior tool results in
+              the conversation, state what you need and ask the user to switch to Normal
+              mode to query it. Do NOT attempt to query it yourself.
+
+            ## Plan Workflow
+
+            ### Phase 1: Understand the Request
+
+            Gain a comprehensive understanding of the user's request.
+
+            - Identify the actors, assets, classes, and properties involved.
+            - Actively consider existing editor state from prior tool results already
+              present in the conversation. Do not ignore information you already have.
+            - If the scope is ambiguous or you lack critical information, ask clarifying
+              questions and STOP your turn. Wait for the user's response before proceeding.
+              NEVER ask a question and continue planning in the same turn.
+
+            ### Phase 2: Explore and Analyze
+
+            Analyze the current state and identify constraints.
+
+            - Review any previously queried actor lists, asset paths, or property values
+              available in the conversation history.
+            - Identify dependencies between operations (e.g., an asset must exist before
+              it can be assigned to a property).
+            - Note any actors or assets that might be affected as side effects.
+            - Consider the order of operations to minimize risk of broken references.
+
+            ### Phase 3: Design the Approach
+
+            Design the implementation strategy.
+
+            - Consider multiple approaches and their tradeoffs.
+            - Choose the approach that minimizes destructive operations and risk.
+            - Identify which tools and operations are needed for each step.
+            - For bulk operations (10+ actors), plan batching and verification steps.
+
+            ### Phase 4: Write the Plan
+
+            Present your plan as a structured markdown document with the following format.
+            This is your final output — write it directly as your response.
+
+            ```
+            # [Task Title]
+
+            ## Context
+            Why this change is being made and what the user wants to achieve.
+
+            ## Current State
+            Summary of relevant editor state known from prior tool results.
+            List any information gaps that need to be queried before execution.
+
+            ## Approach
+            The recommended implementation strategy.
+            If alternatives were considered, briefly note why they were rejected.
+
+            ## Steps
+            Numbered list of specific operations to execute. Each step must include:
+            - The tool to call and its key parameters
+            - What the expected result should be
+            - Any verification to perform after the step
+
+            1. **[Action]** — tool: `tool_name`, params: `{...}`
+               Expected: [what should happen]
+               Verify: [how to confirm success]
+
+            2. ...
+
+            ## Risks
+            - Destructive operations that cannot be undone
+            - Actors or assets that may be affected as side effects
+            - Order-dependent steps where failure breaks subsequent steps
+
+            ## Estimated Scope
+            - Number of actors/assets affected
+            - Approximate number of tool calls required
+            ```
+
+            After presenting the plan, STOP and wait for the user to review.
+            The user will either:
+            - Approve the plan → switch to Normal or Edit mode to execute
+            - Request modifications → revise the plan
+            - Reject the plan → start over or abandon
+
+            NEVER begin execution after writing the plan. Planning and execution
+            are strictly separate phases.
+            </system-reminder>
+            """,
+        
+        AgentMode.Edit => """
+            <system-reminder>
+            ## Mode: Edit (Auto-Approve)
+
+            All tool executions are automatically approved. Proceed with actions directly
+            without waiting for user confirmation.
+            </system-reminder>
+            """,
+        
+        _ => null
+    };
 
 }

@@ -1,5 +1,6 @@
 ﻿using UnrealAgent.Backend.Chat;
 using UnrealAgent.Backend.Conversation;
+using UnrealAgent.Backend.Mode;
 using UnrealAgent.Backend.Security;
 
 namespace UnrealAgent.Backend.Agent;
@@ -18,4 +19,7 @@ public sealed class AgentSession(AgentLoop Loop)
     
     /// <summary>사용자 메시지를 처리합니다. </summary>
     public IAsyncEnumerable<ChatEvent> ProcessMessage(UserInput Input) => Loop.RunAsync(Input, this);
+    
+    /// <summary>현재 에이전트 모드입니다.</summary>
+    public AgentMode Mode { get; set; } = AgentMode.Normal;
 }

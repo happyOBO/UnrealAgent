@@ -62,7 +62,7 @@ public sealed class AgentLoop(PromptBuilder PromptBuilder, ToolExecutor ToolExec
                     foreach (Block.ToolUse ToolCall in ToolCalls)
                     {
                         // 권한 확인
-                        ToolPermission Permission = await Session.PermissionEngine.GetPermissionAsync(ToolCall);
+                        ToolPermission Permission = await Session.PermissionEngine.GetPermissionAsync(ToolCall, Session.Mode);
                         
                         // 사용자에게 권한 요청
                         if (Permission == ToolPermission.Ask)

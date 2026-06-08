@@ -15,11 +15,25 @@ public partial class ChatInput : JsComponentBase
 
     /// <summary>textarea 요소 참조입니다.</summary>
     private ElementReference TextAreaRef;
+    
+    /// <summary>.NET에서 JS가 호출할 수 있는 참조입니다.</summary>
+    private DotNetObjectReference<ChatInput>? DotNetRef;
 
-    /// <summary>JS 모듈 로드 후 Enter 키 바인딩을 설정합니다.</summary>
+    /// <summary>모드 스위처 컴포넌트 참조입니다.</summary>
+    private ModeSwitcher ModeSwitcherRef = null!;
+
+    /// <summary>JS 모듈 로드 후 키 바인딩을 설정합니다.</summary>
     protected override async Task OnModuleLoaded()
     {
-        await Module.InvokeVoidAsync("setupEnterSubmit", TextAreaRef);
+        DotNetRef = DotNetObjectReference.Create(this);
+        await Module.InvokeVoidAsync("setupKeyBindings", TextAreaRef, DotNetRef);
+    }
+    
+    /// <summary>Shift+Tab 시 JS에서 호출됩니다.</summary>
+    [JSInvokable]
+    public void CycleMode()
+    {
+        ModeSwitcherRef.CycleMode();
     }
 
     /// <summary>폼 제출 시 메시지를 전송합니다.</summary>

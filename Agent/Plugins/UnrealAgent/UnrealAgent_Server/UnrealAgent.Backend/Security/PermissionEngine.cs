@@ -1,4 +1,5 @@
 ﻿using UnrealAgent.Backend.Core;
+using UnrealAgent.Backend.Mode;
 
 namespace UnrealAgent.Backend.Security;
 
@@ -14,8 +15,12 @@ public sealed class PermissionEngine
     public void Allow(string ToolName) => AllowedTools.Add(ToolName);
     
     /// <summary>도구 호출의 실행 권한을 조회합니다.</summary>
-    public Task<ToolPermission> GetPermissionAsync(Block.ToolUse ToolCall)
+    public Task<ToolPermission> GetPermissionAsync(Block.ToolUse ToolCall, AgentMode Mode)
     {
+        // Edit 모드 확인
+        if (Mode == AgentMode.Edit)
+            return Task.FromResult(ToolPermission.Allow);
+        
         // 허용 목록 확인
         if (AllowedTools.Contains(ToolCall.Name))
             return Task.FromResult(ToolPermission.Allow);
