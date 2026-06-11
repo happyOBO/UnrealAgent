@@ -12,6 +12,9 @@ public sealed class Conversation
 {
     /// <summary>메시지 구간(사용자 1턴) 목록입니다.</summary>
     private readonly List<MessageSpan> MessageSpans = [];
+    
+    /// <summary>마지막 AssistantSpan의 입력 토큰 수입니다. 현재 컨텍스트 윈도우 사용량을 나타냅니다.</summary>
+    public long ContextTokens => MessageSpans.SelectMany(E => E.AssistantSpans).LastOrDefault()?.InputTokens ?? 0;
 
     /// <summary>첫 번째 사용자 메시지 텍스트를 반환합니다. 빌링 헤더 생성에 사용됩니다.</summary>
     public string GetFirstUserText() => MessageSpans.FirstOrDefault()?.UserInput?.Text ?? "";
@@ -61,11 +64,20 @@ public sealed class Conversation
     /// </summary>
     private static MessageParam ConvertUserInput(UserInput Input)
     {
-        List<ContentBlockParam> Blocks = new List<ContentBlockParam>();
+        List<ContentBlockParam> Blocks = [];
+
+        // 이미지 블록을 먼저 추가 Claude가 이미지를 먼저 인식하도록
+        if (Input.bHasImage)
+        {
+            Blocks.Add(new ImageBlockParam
+            {
+                Source = new Base64ImageSource { MediaType = Input.ImageMediaType!, Data = Input.ImageBase64! }
+            });
+        }
         
-        if (!string.IsNullOrWhiteSpace(Input.Text))
-            Blocks.Add(new TextBlockParam { Text = Input.Text });
-        
+        // 텍스트 추가
+        Blocks.Add(new TextBlockParam { Text = Input.Text });
+
         return new MessageParam { Role = Role.User, Content = Blocks };
     }
 
@@ -117,5 +129,27 @@ public sealed class Conversation
         }).ToList();
         
         return new MessageParam { Role = Role.User, Content = ResultBlocks };
+    }
+    
+    /// <summary>
+    /// 대화 내역을 초기화합니다.
+    /// </summary>
+    public void Clear()
+    {
+        MessageSpans.Clear();
+    }
+    
+    /// <summary>
+    /// 대화 히스토리를 요약 텍스트로 교체합니다.
+    /// 기존 MessageSpan을 모두 지우고, 요약을 assistant 메시지로 담은 MessageSpan 하나를 추가합니다.
+    /// </summary>
+    public void Compact(string Summary)
+    {
+        MessageSpans.Clear();
+        
+        MessageSpans.Add(new MessageSpan
+        {
+            AssistantSpans = { new AssistantSpan { AssistantBlocks = [new Block.Text(Summary)] } }
+        });
     }
 }

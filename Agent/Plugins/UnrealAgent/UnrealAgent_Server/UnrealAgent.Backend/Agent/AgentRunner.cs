@@ -1,6 +1,9 @@
-﻿using Microsoft.Extensions.Hosting;
+﻿using System.Diagnostics;
+using Microsoft.Extensions.Hosting;
 using UnrealAgent.Backend.Chat;
 using UnrealAgent.Backend.Conversation;
+using UnrealAgent.Backend.Core;
+using UnrealAgent.Backend.Team;
 
 namespace UnrealAgent.Backend.Agent;
 
@@ -9,7 +12,7 @@ namespace UnrealAgent.Backend.Agent;
 /// 리더와 팀원 모두 동일한 서비스를 사용합니다.
 /// Store 수정은 직접 하지 않고 OnChatEvent를 통해 UI 스레드에서 실행합니다.
 /// </summary>
-public sealed class AgentRunner(AgentSession Session) : BackgroundService
+public sealed class AgentRunner(AgentSession Session, IHostApplicationLifetime Lifetime) : BackgroundService
 {
     /// <summary>반응형 상태 관리자입니다.</summary>
     public ChatStore Store { get; } = new();
@@ -27,8 +30,18 @@ public sealed class AgentRunner(AgentSession Session) : BackgroundService
     {
         while (!Ct.IsCancellationRequested)
         {
-            // 시그널 대기 — EnqueueMessage 메시지 도착 시 해제
-            await Signal.WaitAsync(Ct);
+            // 시그널 대기 — 사용자 입력 시 즉시, 아니면 3초마다 메일박스 확인
+            await Task.WhenAny(Signal.WaitAsync(Ct), Task.Delay(3000, Ct));
+            
+            // 부모 프로세스 생존 확인 (팀원일 때만)
+            CheckParentAlive();
+            
+            // 메일박스 폴링 (팀 모드일 때만)
+            await DrainMailbox();
+            
+            // 큐에 아무것도 없으면 다시 대기
+            if (MessageQueue.Count == 0) 
+                continue;
             
             // 메시지 큐를 순차 처리합니다.
             await DrainQueue();
@@ -41,7 +54,7 @@ public sealed class AgentRunner(AgentSession Session) : BackgroundService
     public async Task EnqueueMessage(UserInput Input)
     {
         // 사용자 메세지 UI를 위해 추가
-        await DispatchEventAsync(new ChatEvent.User(Input.Text));
+        await DispatchEventAsync(new ChatEvent.User(Input.Text, Input.ImageMediaType, Input.ImageBase64));
         
         MessageQueue.Enqueue(Input);
         Signal.Release();
@@ -79,5 +92,46 @@ public sealed class AgentRunner(AgentSession Session) : BackgroundService
         // 구독자가 없으면 (UI 미로드 상태) 직접 Store에 누적
         Store.Process(Evt);
         return Task.CompletedTask;
+    }
+    
+    /// <summary>
+    /// 메일박스에서 메시지를 읽어 큐에 추가합니다.
+    /// </summary>
+    private async Task DrainMailbox()
+    {
+        if (Session.Team.TeamName is null)
+            return;
+
+        string MailboxDir = AgentPaths.GetMailboxDir(Session.Team.TeamName);
+        List<TeamMessage> Messages = await Mailbox.TakeAllAsync(MailboxDir, Session.Team.AgentName);
+
+        foreach (TeamMessage Msg in Messages)
+        {
+            if (Msg is { Type: MessageType.Command, Content: "shutdown" })
+            {
+                Lifetime.StopApplication();
+                return;
+            }
+
+            MessageQueue.Enqueue(new UserInput($"[{Msg.From}]: {Msg.Content}"));
+        }
+    }
+    
+    /// <summary>
+    /// 부모 프로세스가 종료되었으면 자신도 종료합니다.
+    /// </summary>
+    private void CheckParentAlive()
+    {
+        if (Session.Team.ParentPid is not { } Pid)
+            return;
+
+        try
+        {
+            Process.GetProcessById(Pid);
+        }
+        catch (ArgumentException)
+        {
+            Lifetime.StopApplication();
+        }
     }
 }

@@ -21,9 +21,9 @@ public sealed class ChatStore
 
         switch (Evt)
         {
-            case ChatEvent.User { Content: var Content }:
+            case ChatEvent.User { Content: var Content, ImageMediaType: var MediaType, ImageBase64: var Base64 }:
             {
-                Messages.Add(new ChatUIMessage.User(Content));
+                Messages.Add(new ChatUIMessage.User(Content, MediaType, Base64));
 
                 break;
             }
@@ -97,6 +97,16 @@ public sealed class ChatStore
             case ChatEvent.System { Content: var Content }:
             {
                 Messages.Add(new ChatUIMessage.System(Content));
+                break;
+            }
+
+            case ChatEvent.Command { Name: var Name, Argument: var Argument }:
+            {
+                if (Name.Equals("Clear", StringComparison.OrdinalIgnoreCase))
+                {
+                    Messages.Clear();
+                }
+                
                 break;
             }
 

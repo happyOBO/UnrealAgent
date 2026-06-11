@@ -1,0 +1,50 @@
+@using UnrealAgent.Backend.Mention
+@inherits JsComponentBase
+
+<!-- 멘션 자동완성 팝업입니다. -->
+@if (bShowPopup)
+{
+    <div class="mention-popup absolute bottom-full left-0 mb-2 w-[380px] bg-[#1a1a1a]/95 backdrop-blur-md border border-[#333] rounded-lg shadow-2xl z-50 overflow-hidden ring-1 ring-black/50">
+        <div class="px-4 py-2.5 border-b border-[#2a2a2a] bg-[#151515] flex justify-between items-center">
+            <span class="text-[11px] font-bold text-[#0070e0] uppercase tracking-wide">
+                @(string.IsNullOrEmpty(BasePath) ? "Mention Asset" : BasePath)
+            </span>
+            <span class="text-[10px] text-[#ccc]">Esc to close</span>
+        </div>
+        <div class="max-h-[280px] overflow-y-auto py-1">
+            @if (Items.Count == 0)
+            {
+                <div class="px-4 py-4 text-center text-[11px] text-[#555]">항목이 없습니다</div>
+            }
+            @for (int I = 0; I < Items.Count; I++)
+            {
+                int Index = I;
+                MentionItem Item = Items[I];
+                bool bIsSelected = Index == SelectedIndex;
+
+                <div id="mention-item-@Index"
+                     class="w-full flex items-center gap-3 px-4 py-2.5 transition-colors
+                            @(bIsSelected
+                                ? "bg-[#0070e0]/20 border-l-2 border-[#0070e0]"
+                                : "border-l-2 border-transparent")">
+                    <div class="flex items-center justify-center size-7 rounded border shrink-0 transition-colors
+                                @(bIsSelected
+                                    ? "bg-[#0070e0] border-[#0070e0] text-white shadow-[0_0_8px_rgba(0,112,224,0.4)]"
+                                    : "bg-[#111] border-[#333] text-[#aaa]")">
+                        <span class="material-symbols-outlined text-[16px]">@(Item.Kind == MentionItemKind.Folder ? "folder" : "description")</span>
+                    </div>
+                    <div class="flex flex-col min-w-0">
+                        <span class="text-[13px] truncate @(bIsSelected ? "font-bold text-white" : "font-medium text-[#ccc]")">@Item.Name</span>
+                        <span class="text-[10px] @(bIsSelected ? "text-[#0070e0] font-medium" : "text-[#666]")">@(Item.Kind == MentionItemKind.Folder ? "Folder" : "File")</span>
+                    </div>
+                    @if (bIsSelected)
+                    {
+                        <span class="ml-auto shrink-0 text-[10px] font-mono text-[#0070e0]">
+                            @(Item.Kind == MentionItemKind.Folder ? "Tab ▸" : "↵ Enter")
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}

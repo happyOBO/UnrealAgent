@@ -2,9 +2,11 @@
 using Anthropic.Models.Messages;
 using UnrealAgent.Backend.Agent;
 using UnrealAgent.Backend.Auth;
+using UnrealAgent.Backend.Core;
 using UnrealAgent.Backend.Mode;
 using UnrealAgent.Backend.Model;
 using UnrealAgent.Backend.Model.Models;
+using UnrealAgent.Backend.Skill;
 using UnrealAgent.Backend.Tool;
 
 namespace UnrealAgent.Backend.Prompt;
@@ -13,7 +15,7 @@ namespace UnrealAgent.Backend.Prompt;
 /// Claude API 시스템 프롬프트 구성과 MessageCreateParams 생성을 담당합니다.
 /// 시스템 프롬프트는 최초 호출 시 생성되고 이후 캐싱됩니다.
 /// </summary>
-public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings ModelSettings)
+public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings ModelSettings, SkillRegistry SkillRegistry)
 {
     /// <summary>빌더 체인의 각 섹션입니다. 토큰 측정 시 특정 섹션을 제외할 수 있습니다.</summary>
     [Flags]
@@ -27,6 +29,9 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
         ToneAndStyle   = 1 << 4,
         OutputEfficiency = 1 << 5,
         ModeOverride   = 1 << 6,
+        UnrealAgentMd  = 1 << 7,
+        Skills         = 1 << 8,
+        All            = Identity | System | DoingTasks | Proactiveness | ToneAndStyle | OutputEfficiency | ModeOverride | UnrealAgentMd | Skills,
     }
     
     // ── API 파라미터 생성 ──
@@ -61,7 +66,18 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
     {
         return BuildInternal(Section.None, Session);
     }
+    
+    /// <summary>
+    /// 지정한 섹션을 제외한 시스템 프롬프트를 생성합니다.
+    /// </summary>
+    public string BuildWithout(Section Skip, AgentSession? Session = null) => BuildInternal(Skip, Session);
 
+    /// <summary>
+    /// 지정한 섹션만 포함한 시스템 프롬프트를 생성합니다.
+    /// </summary>
+    public string BuildOnly(Section Include, AgentSession? Session = null) => BuildInternal(Section.All & ~Include, Session);
+      
+  
     /// <summary>각 섹션 메서드를 호출하고 결과를 결합하여 프롬프트 문자열을 생성합니다.</summary>
     private string BuildInternal(Section Skip, AgentSession? Session)
     {
@@ -70,10 +86,17 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
         StringBuilder Sb = new();
         
         if (!Skip.HasFlag(Section.Identity))
-          Sb.AppendLine(Identity());
+          Sb.AppendLine(Identity(Session));
         
         if (!Skip.HasFlag(Section.System))
           Sb.AppendLine(System());
+        
+        if (!Skip.HasFlag(Section.UnrealAgentMd))
+        {
+            string? Md = UnrealAgentMd();
+            if (Md is not null)
+              Sb.AppendLine(Md);
+        }
         
         if (!Skip.HasFlag(Section.ModeOverride))
         {
@@ -95,6 +118,14 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
         if (!Skip.HasFlag(Section.OutputEfficiency))
           Sb.AppendLine(OutputEfficiency());
         
+        if (!Skip.HasFlag(Section.Skills))
+        {
+            string? Skills = SkillListing();
+            
+            if (Skills is not null)
+              Sb.AppendLine(Skills);
+        }
+        
         return Sb.ToString();
     }
     
@@ -103,18 +134,35 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
     /// <summary>
     /// AI 어시스턴트의 역할과 핵심 규칙을 정의합니다.
     /// </summary>
-    private static string Identity() => """
-                                        You are UnrealAgent, an AI assistant that controls Unreal Editor.
+    private static string Identity(AgentSession? Session)
+    {
+      string Base = """
+                    You are UnrealAgent, an AI assistant that controls Unreal Editor.
 
-                                        You are an interactive agent that helps users with Unreal Engine level design,
-                                        asset management, and editor automation tasks. Use the instructions below and
-                                        the tools available to you to assist the user.
+                    You are an interactive agent that helps users with Unreal Engine level design,
+                    asset management, and editor automation tasks. Use the instructions below and
+                    the tools available to you to assist the user.
 
-                                        IMPORTANT: You must NEVER guess actor names, asset paths, or property values.
-                                        Always query the current state first.
-                                        IMPORTANT: Before deleting assets or making bulk destructive changes (100+
-                                        actors, project settings), always confirm with the user first.
-                                        """;
+                    IMPORTANT: You must NEVER guess actor names, asset paths, or property values.
+                    Always query the current state first.
+                    IMPORTANT: Before deleting assets or making bulk destructive changes (100+
+                    actors, project settings), always confirm with the user first.
+                    """;
+
+      if (Session?.Team.ParentPid is null)
+        return Base;
+
+      return Base + $"""
+
+                     ## Team Role
+                     You are a TEAMMATE named "{Session.Team.AgentName}" in team "{Session.Team.TeamName}".
+                     You are NOT the leader. You were spawned to perform a specific task.
+                     - Focus on the task given in your first message.
+                     - Report your results back to the leader using the team tool (action: "message", recipient: "leader").
+                     - You can only use "message", "broadcast", and "status" actions in the team tool.
+                     - Do NOT create teams, spawn teammates, or shut down other teammates.
+                     """;
+    }
     
     /// <summary>
     /// 시스템 레벨 동작 규칙을 정의합니다.
@@ -315,4 +363,53 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
         _ => null
     };
 
+    /// <summary>
+    /// UNREALAGENT.md 프로젝트 지침을 반환합니다. 파일이 없으면 null을 반환합니다.
+    /// </summary>
+    private static string? UnrealAgentMd()
+    {
+        string FilePath = Path.Combine(AgentPaths.RootPath, "UNREALAGENT.md");
+        if (!File.Exists(FilePath))
+          return null;
+        
+        string Content = File.ReadAllText(FilePath).Trim();
+        if (string.IsNullOrEmpty(Content))
+          return null;
+        
+        return $"""
+                <system-reminder>
+                # UNREALAGENT.md
+                Project instructions are shown below. Be sure to adhere to these instructions.
+                IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow
+                them exactly as written.
+
+                {Content}
+                </system-reminder>
+                """;
+    }
+    
+    /// <summary>
+    /// 스킬 목록을 시스템 프롬프트에 포함합니다. 스킬이 없으면 null을 반환합니다.
+    /// disableModelInvocation인 스킬은 제외됩니다.
+    /// </summary>
+    private string? SkillListing()
+    {
+        string? Listing = SkillRegistry.GetSkillListingPrompt();
+        if (Listing is null)
+          return null;
+  
+        return $"""
+                <system-reminder>
+                The following skills are available for use with the skill tool:
+  
+                {Listing}
+  
+                /<skill-name> is shorthand for users to invoke a skill.
+                When executed, the skill gets expanded to a full prompt.
+                Use the skill tool to execute them.
+                IMPORTANT: Only use the skill tool for skills listed above — do not guess
+                or use built-in commands.
+                </system-reminder>
+                """;
+    }
 }

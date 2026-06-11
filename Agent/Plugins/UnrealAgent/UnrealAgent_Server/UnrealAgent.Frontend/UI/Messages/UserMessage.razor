@@ -9,6 +9,17 @@
             <span class="text-xs font-bold text-[#e0e0e0] tracking-wide">You</span>
         </div>
         
+        <!-- 이미지 처리 -->
+        @if (Message.ImageBase64 is not null)
+        {
+            <div class="flex justify-end">
+                <img src="data:@Message.ImageMediaType;base64,@Message.ImageBase64"
+                     class="max-w-xs max-h-48 rounded border border-[#333] shadow-md object-contain"
+                     alt="" />
+            </div>
+        }
+
+        <!-- 텍스트 처리 -->
         @if (!string.IsNullOrWhiteSpace(Message.Content))
         {
             <div class="text-[13px] text-[#ccc] leading-relaxed text-right bg-gradient-to-l from-[#1a1a1a] to-transparent py-1 pl-4 rounded-l max-w-3xl w-full font-normal tracking-wide">

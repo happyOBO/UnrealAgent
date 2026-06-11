@@ -67,6 +67,9 @@ public sealed class ApiStreamSpan
     public IReadOnlyList<Block> Blocks => AssistantBlocks;
     private readonly List<Block> AssistantBlocks = [];
     
+    /// <summary>이 턴에서 API에 보낸 입력 토큰 수입니다. 컨텍스트 윈도우 사용량을 나타냅니다.</summary>
+    private long InputTokens;
+    
     // ── 일반 함수들 ──
     
     /// <summary>
@@ -104,6 +107,9 @@ public sealed class ApiStreamSpan
     /// </summary>
     private ChatEvent? ProcessMessageStart(RawMessageStartEvent StartMsgEvt)
     {
+        Usage Usg = StartMsgEvt.Message.Usage;
+        InputTokens = Usg.InputTokens + (Usg.CacheReadInputTokens ?? 0) + (Usg.CacheCreationInputTokens ?? 0);
+        
         return null;
     }
     
@@ -220,6 +226,7 @@ public sealed class ApiStreamSpan
         AssistantSpan CompleteSpan = new() 
         {
             AssistantBlocks = AssistantBlocks.ToList(),
+            InputTokens = InputTokens,
         };
         
         // 도구 실행 요청이 있는지 체크

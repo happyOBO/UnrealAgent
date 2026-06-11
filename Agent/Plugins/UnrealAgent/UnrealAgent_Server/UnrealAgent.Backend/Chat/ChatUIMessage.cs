@@ -21,7 +21,7 @@ public abstract record ChatUIMessage
     //-----------------------------------------------------------------------------
 
     /// <summary>사용자 메시지입니다.</summary>
-    public sealed record User(string Content) : ChatUIMessage;
+    public sealed record User(string Content, string? ImageMediaType = null, string? ImageBase64 = null) : ChatUIMessage;
     
     //-----------------------------------------------------------------------------
     // Assistant

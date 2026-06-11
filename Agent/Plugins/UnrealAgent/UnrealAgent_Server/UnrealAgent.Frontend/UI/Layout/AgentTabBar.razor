@@ -1,9 +1,33 @@
+@using UnrealAgent.Backend.Team
+
 <div class="flex items-center justify-between px-0 bg-[#151515] border-b border-[#222] shrink-0 h-10">
     <div class="flex items-center h-full overflow-x-auto">
         @* 리더 탭 (항상 존재) *@
-        <button class="h-full flex items-center gap-2 px-5 border-t-2 text-[11px] font-semibold tracking-wide transition-colors relative border-t-transparent border-b border-b-[#0070e0] bg-[#1a1a1a] text-[#fff]">
+        <button class="@LeaderTabClass()" @onclick="() => SelectTab(null)">
             <span class="font-sans font-black text-[#0070e0] text-xs">U</span>
             <span class="whitespace-nowrap">UnrealAgent</span>
         </button>
+
+        @* 팀원 탭 (팀이 있을 때만) *@
+        @foreach ((string Name, TeammateInfo Info) in Team.Members)
+        {
+            string MemberName = Name;
+            int MemberPort = Info.Port;
+            bool IsExited = Info.Process.HasExited;
+
+            <button class="@TeammateTabClass(MemberPort)" @onclick="() => SelectTab(MemberPort)">
+                <span class="@(IsExited ? "bg-[#666]" : "bg-[#10b981]") w-2 h-2 rounded-full shrink-0"></span>
+                <span class="whitespace-nowrap">@MemberName</span>
+            </button>
+        }
     </div>
+
+    @* 팀 이름 표시 *@
+    @if (Team.TeamName is not null)
+    {
+        <div class="flex items-center gap-1.5 px-4 text-[10px] text-[#888] tracking-wide shrink-0">
+            <span class="material-symbols-outlined text-[13px]">groups</span>
+            <span>@Team.TeamName</span>
+        </div>
+    }
 </div>

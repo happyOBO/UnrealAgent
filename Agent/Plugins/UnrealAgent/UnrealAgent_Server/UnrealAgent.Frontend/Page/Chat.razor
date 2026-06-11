@@ -1,14 +1,35 @@
 @page "/"
 
-<Header OnSettingsClick="ToggleSettings"/>
-<SettingsPanel bIsVisible="bShowSettings" OnClose="ToggleSettings" />
-<AgentTabBar/> 
-<ChatMessages Messages="AgentRunner.Store.Messages" bIsReceiving="AgentRunner.Store.bIsReceiving" />
-<div class="relative shrink-0">
-    @if (PendingPermission is { } PermReq)
+@if (AgentSession.Team.ParentPid is null)
+{
+    @* 리더 모드 — 전체 UI *@
+    <Header OnSettingsClick="ToggleSettings"/>
+    <SettingsPanel bIsVisible="bShowSettings" OnClose="ToggleSettings" />
+    <AgentTabBar Team="AgentSession.Team" OnTabSelected="port => SelectedTeammatePort = port"/>
+
+    @if (SelectedTeammatePort is { } Port)
     {
-        <PermissionDialog Request="PermReq" OnDecision="HandlePermissionDecision" />
+        @* 팀원 탭 — iframe으로 팀원 UI 표시 *@
+        <iframe src="@($"http://localhost:{Port}")" class="flex-1 w-full border-0"></iframe>
     }
-    
-    <ChatInput OnSend="AgentRunner.EnqueueMessage"/>
-</div>
+    else
+    {
+        <ChatMessages Messages="AgentRunner.Store.Messages" bIsReceiving="AgentRunner.Store.bIsReceiving" />
+        <div class="relative shrink-0">
+            @if (PendingPermission is { } PermReq)
+            {
+                <PermissionDialog Request="PermReq" OnDecision="HandlePermissionDecision" />
+            }
+
+            <ChatInput OnSend="AgentRunner.EnqueueMessage" ContextTokens="AgentSession.Conversation.ContextTokens"/>
+        </div>
+    }
+}
+else
+{
+    @* 팀원 모드 — 채팅 + 입력만 *@
+    <ChatMessages Messages="AgentRunner.Store.Messages" bIsReceiving="AgentRunner.Store.bIsReceiving" />
+    <div class="relative shrink-0">
+        <ChatInput OnSend="AgentRunner.EnqueueMessage" ContextTokens="AgentSession.Conversation.ContextTokens"/>
+    </div>
+}

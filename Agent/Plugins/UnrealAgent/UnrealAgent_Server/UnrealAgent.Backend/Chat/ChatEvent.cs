@@ -8,7 +8,7 @@ namespace UnrealAgent.Backend.Chat;
 public abstract record ChatEvent
 {
     /// <summary>사용자 메시지입니다. </summary>
-    public sealed record User(string Content) : ChatEvent;
+    public sealed record User(string Content, string? ImageMediaType = null, string? ImageBase64 = null) : ChatEvent;
     
     /// <summary>Claude의 텍스트 응답입니다.</summary>
     public sealed record Assistant(string Content) : ChatEvent;
@@ -31,6 +31,9 @@ public abstract record ChatEvent
     
     /// <summary>시스템 메시지입니다 (커맨드 결과, 에러 등).</summary>
     public sealed record System(string Content) : ChatEvent;
+    
+    /// <summary>커맨드 메시지입니다.</summary>
+    public sealed record Command(string Name, string Argument) : ChatEvent;
     
     /// <summary>스트림 종료입니다.</summary>
     public sealed record Done : ChatEvent;

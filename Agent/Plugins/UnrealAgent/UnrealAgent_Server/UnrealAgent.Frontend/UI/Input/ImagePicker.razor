@@ -1,0 +1,11 @@
+@inherits JsComponentBase
+
+<!-- 첨부 버튼입니다. -->
+<button type="button"
+        @onclick="Pick"
+        class="relative group p-1.5 text-[#666] hover:text-[#0070e0] transition-colors rounded hover:bg-[#222]">
+    <span class="material-symbols-outlined text-[18px]">attach_file</span>
+</button>
+
+<!--  브라우저에게 파일 선택 기능을 쓰겠다고 알리는 선언 + 파일 다이얼로그 사용 -->
+<input type="file" @ref="FileInputRef" accept="image/*" style="display:none" />

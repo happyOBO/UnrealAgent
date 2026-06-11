@@ -19,6 +19,20 @@ public static class AgentPaths
     /// <summary>프로젝트 레벨 설정 디렉토리 경로입니다 ({RootPath}/.unrealagent).</summary>
     public static string ConfigDir => Path.Combine(RootPath, ".unrealagent");
     
+    /// <summary>스킬 디렉토리 경로입니다 ({ConfigDir}/skills).</summary>
+    public static string SkillsDir => Path.Combine(ConfigDir, "skills");
+    
+    // ── 팀 경로 ──
+    
+    /// <summary>전체 팀 루트 디렉토리입니다 ({ConfigDir}/teams).</summary>
+    public static string TeamsRoot => Path.Combine(ConfigDir, "teams");
+
+    /// <summary>특정 팀의 디렉토리 경로를 반환합니다 ({ConfigDir}/teams/{TeamName}).</summary>
+    public static string GetTeamDir(string TeamName) => Path.Combine(TeamsRoot, TeamName);
+
+    /// <summary>팀 메일박스 디렉토리 경로를 반환합니다 ({ConfigDir}/teams/{TeamName}/mailbox).</summary>
+    public static string GetMailboxDir(string TeamName) => Path.Combine(GetTeamDir(TeamName), "mailbox");
+    
     // ── 초기화 ──
 
     static AgentPaths()

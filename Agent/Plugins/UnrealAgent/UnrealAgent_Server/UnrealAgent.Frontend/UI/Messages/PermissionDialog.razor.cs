@@ -21,7 +21,7 @@ public partial class PermissionDialog : JsComponentBase
     protected override async Task OnModuleLoaded()
     {
         DotNetRef = DotNetObjectReference.Create(this);
-        await Module.InvokeVoidAsync("setup", DotNetRef);
+        await Module!.InvokeVoidAsync("setup", DotNetRef);
     }
 
     /// <summary>JS에서 1/2/3 키 입력 시 호출됩니다.</summary>

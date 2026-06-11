@@ -80,7 +80,7 @@ public partial class CodeBlock : JsComponentBase
     protected override async Task OnModuleLoaded()
     {
         if (!string.IsNullOrEmpty(Message.Input))
-            await Module.InvokeVoidAsync("highlightCode", CodeRef);
+            await Module!.InvokeVoidAsync("highlightCode", CodeRef);
     }
 
     //--------------------------------------------------------------------------

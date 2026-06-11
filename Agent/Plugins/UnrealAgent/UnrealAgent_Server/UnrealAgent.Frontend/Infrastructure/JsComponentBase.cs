@@ -12,7 +12,7 @@ public abstract class JsComponentBase : ComponentBase, IAsyncDisposable
     [Inject] private IJSRuntime Js { get; set; } = null!;
 
     /// <summary>로드된 JS 모듈 참조입니다. OnModuleLoaded() 이후 사용 가능합니다.</summary>
-    protected IJSObjectReference Module = null!;
+    protected IJSObjectReference? Module;
     
     /// <summary>빌드 시각 기반 캐시 무효화 버전입니다.</summary>
     private static readonly long CacheBuster = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -52,6 +52,9 @@ public abstract class JsComponentBase : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (Module is null) 
+            return;
+
         try
         {
             await Module.DisposeAsync();

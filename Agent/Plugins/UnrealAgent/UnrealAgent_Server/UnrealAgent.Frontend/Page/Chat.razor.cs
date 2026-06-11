@@ -10,6 +10,9 @@ public partial class Chat : IAsyncDisposable
     /// <summary>에이전트 실행 서비스입니다.</summary>
     [Inject] private AgentRunner AgentRunner { get; set; } = null!;
 
+    /// <summary>에이전트 세션입니다.</summary>
+    [Inject] private AgentSession AgentSession { get; set; } = null!;
+
     /// <summary>설정 패널 표시 여부입니다.</summary>
     private bool bShowSettings;
 
@@ -24,6 +27,9 @@ public partial class Chat : IAsyncDisposable
 
     /// <summary>현재 대기 중인 권한 요청입니다.</summary>
     private ChatEvent.ToolPermissionRequest? PendingPermission;
+    
+    /// <summary>선택된 팀원 포트입니다. null이면 리더 탭입니다.</summary>
+    private int? SelectedTeammatePort;
 
     protected override void OnInitialized()
     {

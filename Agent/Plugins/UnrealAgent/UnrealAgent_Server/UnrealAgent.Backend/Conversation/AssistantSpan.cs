@@ -16,4 +16,7 @@ public sealed class AssistantSpan
     
     /// <summary>도구 실행 결과 목록입니다. 도구 호출이 없으면 비어 있습니다.</summary>
     public List<ToolExecution> ToolExecutions { get; } = [];
+    
+    /// <summary>API 호출의 입력 토큰 수입니다.</summary>
+    public long InputTokens { get; init; }
 }
