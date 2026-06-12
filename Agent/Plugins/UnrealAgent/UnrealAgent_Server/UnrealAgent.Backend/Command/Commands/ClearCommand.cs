@@ -18,6 +18,9 @@ public class ClearCommand : IAgentCommand
     {
         Session.Conversation.Clear();
 
+        // claude CLI 세션을 끊어 다음 턴이 새 세션으로 시작되도록 합니다.
+        Session.ClaudeSessionId = null;
+
         yield return new ChatEvent.Command("clear", "");
     }
 }

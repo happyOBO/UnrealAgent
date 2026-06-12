@@ -1,114 +1,122 @@
-﻿using System.Runtime.CompilerServices;
-using Anthropic.Models.Messages;
+using System.Runtime.CompilerServices;
 using UnrealAgent.Backend.Auth;
 using UnrealAgent.Backend.Chat;
+using UnrealAgent.Backend.ClaudeCode;
 using UnrealAgent.Backend.Conversation;
+using UnrealAgent.Backend.Core;
+using UnrealAgent.Backend.Model;
 using UnrealAgent.Backend.Prompt;
 using UnrealAgent.Backend.Security;
-using UnrealAgent.Backend.Token;
-using UnrealAgent.Backend.Tool;
-using Block = UnrealAgent.Backend.Core.Block;
 
 namespace UnrealAgent.Backend.Agent;
 
 /// <summary>
 /// 에이전트 루프입니다.
-/// Claude API 스트리밍 → 도구 실행을 반복하며, 모든 지능은 모델에 위임합니다.
+/// claude CLI(Claude Code)를 stream-json 모드로 구동하고, NDJSON 이벤트를 ChatEvent로 변환합니다.
+/// 에이전트 지능(도구 실행/대화 관리)은 CLI가 소유하며, 본 루프는 오케스트레이션과 권한 중계만 담당합니다.
 /// </summary>
-public sealed class AgentLoop(PromptBuilder PromptBuilder, ToolExecutor ToolExecutor, AuthConfig Auth, TokenTracker TokenTracker)
+public sealed class AgentLoop(
+    PromptBuilder PromptBuilder,
+    ModelSettings ModelSettings,
+    ClaudeCliLocator Locator,
+    CliMcpConfig McpConfig,
+    AuthConfig Auth)
 {
     /// <summary>
     /// 사용자 메시지 1건에 대한 에이전트 루프를 실행합니다.
-    /// 호출 1회가 MessageSpan 1개에 대응하며, 모델이 도구를 사용할 때마다 내부에서 API를 반복 호출합니다.
+    /// 호출 1회가 claude CLI 프로세스 1개(1턴)에 대응하며, 세션은 --resume으로 이어집니다.
     /// </summary>
     public async IAsyncEnumerable<ChatEvent> RunAsync(UserInput Input, AgentSession Session, [EnumeratorCancellation] CancellationToken Ct = default)
     {
-        // 시스템 프롬프트/도구 스키마의 고정 토큰을 측정합니다.
-        await TokenTracker.MeasureAsync();
-        
-        // 대화 히스토리에 사용자 입력 추가
-        MessageSpan CurrentMessageSpan = Session.Conversation.AddMessageSpan(Input);
-        
-        // 에이전트 루프: 도구 실행이 필요하면 API를 반복 호출
-        while (true)
+        string? CliPath = Locator.Find();
+        if (CliPath is null)
         {
-            // API 요청 파라미터 구성
-            MessageCreateParams Parameters = PromptBuilder.Build(Session);
+            yield return new ChatEvent.System(
+                "claude CLI를 찾을 수 없습니다. 'npm install -g @anthropic-ai/claude-code'로 설치하세요.");
+            yield return new ChatEvent.Done();
+            yield break;
+        }
 
-            // 스트리밍 응답 수신 및 출력
-            ApiStreamSpan ApiStreamSpan = new ApiStreamSpan();
-            await foreach (RawMessageStreamEvent Event in Auth.Client!.Messages.CreateStreaming(Parameters))
+        bool IsHaiku = ModelSettings.Model.Contains("haiku", StringComparison.OrdinalIgnoreCase);
+
+        ClaudeRunOptions Options = new()
+        {
+            SystemPrompt = PromptBuilder.BuildSystemPrompt(Session),
+            Model = ModelSettings.Model,
+            Effort = IsHaiku ? null : ModelSettings.GetCliEffort(),
+            ThinkingEnabled = !IsHaiku && ModelSettings.bThinkingEnabled,
+            Mode = Session.Mode,
+            McpConfigPath = McpConfig.Path,
+            ResumeSessionId = Session.ClaudeSessionId,
+            WorkingDirectory = string.IsNullOrEmpty(AgentPaths.RootPath) ? null : AgentPaths.RootPath,
+            ApiKey = Auth.ApiKey,
+        };
+
+        // tool_use_id → 도구 이름 (tool_result에 이름을 채우기 위함)
+        Dictionary<string, string> ToolNames = new();
+
+        await using ClaudeCodeRunner Runner = new(CliPath);
+
+        await foreach (ClaudeStreamItem Item in Runner.RunAsync(Options, Input, Ct))
+        {
+            switch (Item)
             {
-                if (ApiStreamSpan.Process(Event) is { } Evt)
+                case ClaudeStreamItem.Init Init:
+                    Session.ClaudeSessionId = Init.SessionId;
+                    break;
+
+                case ClaudeStreamItem.AssistantText Text:
+                    yield return new ChatEvent.Assistant(Text.Text);
+                    break;
+
+                case ClaudeStreamItem.Thinking Thinking:
+                    yield return new ChatEvent.Thinking(Thinking.Text);
+                    break;
+
+                case ClaudeStreamItem.ToolUse Tool:
+                    ToolNames[Tool.Id] = Tool.Name;
+                    yield return new ChatEvent.ToolStart(Tool.Id, Tool.Name, Tool.InputJson);
+                    break;
+
+                case ClaudeStreamItem.ToolResult Result:
+                    string Name = ToolNames.GetValueOrDefault(Result.ToolUseId, "");
+                    yield return new ChatEvent.ToolEnd(Result.ToolUseId, Name, Result.Content);
+                    break;
+
+                case ClaudeStreamItem.Permission Perm:
                 {
-                    yield return Evt;
+                    // 권한 엔진 판정: Edit/팀/허용목록은 자동 허용, 그 외 Ask
+                    Block.ToolUse ToolCall = new(Perm.ToolUseId ?? Perm.RequestId, Perm.ToolName, Perm.InputJson);
+                    ToolPermission Decision = await Session.PermissionEngine.GetPermissionAsync(ToolCall, Session.Mode);
+
+                    if (Decision == ToolPermission.Ask)
+                    {
+                        ChatEvent.ToolPermissionRequest Request = new(ToolCall.Id, Perm.ToolName, Perm.InputJson);
+                        yield return Request;
+
+                        Decision = await Request.Tcs.Task.WaitAsync(Ct);
+
+                        if (Decision == ToolPermission.AlwaysAllow)
+                            Session.PermissionEngine.Allow(Perm.ToolName);
+                    }
+
+                    // CLI에 control_response 전송 (runner가 Decision 설정을 기다리는 중)
+                    Perm.Decision.SetResult(Decision != ToolPermission.Deny);
+                    break;
                 }
-            }
 
-            // 완료된 응답을 대화 히스토리에 저장
-            switch (ApiStreamSpan.Complete())
-            {
-                // 정상적으로 완료된 경우
-                case ApiStreamSpan.Result.EndSpan { CompletedSpan: { } AssistantSpan }:
-                {
-                    CurrentMessageSpan.AssistantSpans.Add(AssistantSpan);
-
+                case ClaudeStreamItem.Result:
                     yield return new ChatEvent.Done();
                     yield break;
-                }
 
-                // 도구 결과를 포함하여 다음 API 호출로 이어감
-                case ApiStreamSpan.Result.ExecuteTools { CompletedSpan: { } AssistantSpan, ToolCalls: { } ToolCalls }:
-                {
-                    CurrentMessageSpan.AssistantSpans.Add(AssistantSpan);
-
-                    // 권한 → 실행
-                    foreach (Block.ToolUse ToolCall in ToolCalls)
-                    {
-                        // 권한 확인
-                        ToolPermission Permission = await Session.PermissionEngine.GetPermissionAsync(ToolCall, Session.Mode);
-                        
-                        // 사용자에게 권한 요청
-                        if (Permission == ToolPermission.Ask)
-                        {
-                            ChatEvent.ToolPermissionRequest PermissionRequest = new(ToolCall.Id, ToolCall.Name, ToolCall.InputJson);
-                            yield return PermissionRequest;
-                            
-                            // UI에서 권한을 선택하기전까지 대기
-                            ToolPermission Result = await PermissionRequest.Tcs.Task.WaitAsync(Ct);
-
-                            // 도구 거부 처리
-                            if (Result == ToolPermission.Deny)
-                            {
-                                string DenyMsg = $"User denied execution of tool '{ToolCall.Name}'.";
-                                AssistantSpan.ToolExecutions.Add(new AssistantSpan.ToolExecution(ToolCall.Id, ToolCall.Name, DenyMsg, bIsError: true));
-                                
-                                yield return new ChatEvent.ToolEnd(ToolCall.Id, ToolCall.Name, DenyMsg);
-                                continue;
-                            }
-                            
-                            // AlwaysAllow인 경우 권한 엔진에 영구 등록합니다.
-                            if (Result == ToolPermission.AlwaysAllow)
-                                Session.PermissionEngine.Allow(ToolCall.Name);
-                        }
-                        
-                        // 도구 실행
-                        await foreach (ChatEvent Evt in ToolExecutor.ExecuteAsync(ToolCall, AssistantSpan, Session))
-                        {
-                            yield return Evt;
-                        }
-                    }
-                    
-                    break;
-                }
-
-                // 잘린 응답을 이어서 생성
-                case ApiStreamSpan.Result.Continue { CompletedSpan: { } AssistantSpan }:
-                {
-                    CurrentMessageSpan.AssistantSpans.Add(AssistantSpan);
-                    break;
-                }
+                case ClaudeStreamItem.Failure Failure:
+                    yield return new ChatEvent.System(Failure.Message);
+                    yield return new ChatEvent.Done();
+                    yield break;
             }
         }
+
+        // result 없이 스트림이 끝난 경우의 안전망
+        yield return new ChatEvent.Done();
     }
 }

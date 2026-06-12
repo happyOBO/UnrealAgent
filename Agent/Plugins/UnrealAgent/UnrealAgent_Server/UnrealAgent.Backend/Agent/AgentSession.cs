@@ -24,6 +24,9 @@ public sealed class AgentSession
     /// <summary>현재 에이전트 모드입니다.</summary>
     public AgentMode Mode { get; set; } = AgentMode.Normal;
 
+    /// <summary>claude CLI 세션 ID입니다. 매 턴 --resume으로 대화를 이어가며, /clear 시 초기화됩니다.</summary>
+    public string? ClaudeSessionId { get; set; }
+
     // <summary>미들웨어 체인을 통해 메시지를 처리하는 파이프라인입니다.</summary>
     private readonly AgentPipeline Pipeline;
     

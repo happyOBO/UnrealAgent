@@ -1,13 +1,8 @@
 ﻿using System.Text;
-using Anthropic.Models.Messages;
 using UnrealAgent.Backend.Agent;
-using UnrealAgent.Backend.Auth;
 using UnrealAgent.Backend.Core;
 using UnrealAgent.Backend.Mode;
-using UnrealAgent.Backend.Model;
-using UnrealAgent.Backend.Model.Models;
 using UnrealAgent.Backend.Skill;
-using UnrealAgent.Backend.Tool;
 
 namespace UnrealAgent.Backend.Prompt;
 
@@ -15,7 +10,7 @@ namespace UnrealAgent.Backend.Prompt;
 /// Claude API 시스템 프롬프트 구성과 MessageCreateParams 생성을 담당합니다.
 /// 시스템 프롬프트는 최초 호출 시 생성되고 이후 캐싱됩니다.
 /// </summary>
-public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings ModelSettings, SkillRegistry SkillRegistry)
+public sealed class PromptBuilder(SkillRegistry SkillRegistry)
 {
     /// <summary>빌더 체인의 각 섹션입니다. 토큰 측정 시 특정 섹션을 제외할 수 있습니다.</summary>
     [Flags]
@@ -32,29 +27,6 @@ public sealed class PromptBuilder(ToolRegistry ToolRegistry, ModelSettings Model
         UnrealAgentMd  = 1 << 7,
         Skills         = 1 << 8,
         All            = Identity | System | DoingTasks | Proactiveness | ToneAndStyle | OutputEfficiency | ModeOverride | UnrealAgentMd | Skills,
-    }
-    
-    // ── API 파라미터 생성 ──
-
-    /// <summary>
-    /// Claude API 호출 파라미터를 생성합니다.
-    /// </summary>
-    public MessageCreateParams Build(AgentSession Session)
-    {
-        return new()
-        {
-            Model = ModelSettings.Model,
-            MaxTokens = ModelSettings.MaxTokens,
-            CacheControl = new CacheControlEphemeral(),
-            System = new List<TextBlockParam>
-            {
-                new() { Text = BuildSystemPrompt(Session) }
-            },
-            Messages = Session.Conversation.ToAnthropicMessages(),
-            Tools = ToolRegistry.GetAllSchemas().Select(S => (ToolUnion)S).ToList(),
-            Thinking = ModelSettings.Model != Haiku45.ModelId ? ModelSettings.GetThinking() : null,
-            OutputConfig = ModelSettings.Model != Haiku45.ModelId ? ModelSettings.GetEffort() : null
-        };
     }
     
     // ── 시스템 프롬프트 구성 ──

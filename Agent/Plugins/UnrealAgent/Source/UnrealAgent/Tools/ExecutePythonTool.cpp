@@ -27,7 +27,7 @@ FMcpResponse FExecutePythonTool::Execute()
 	Cmd.ExecutionMode = EPythonCommandExecutionMode::ExecuteFile;
 
 	// PythonScriptPlugin을 통해 코드를 실행합니다
-	if (Python->ExecPythonCommandEx(Cmd))
+	if (Python->ExecPythonCommandEx(Cmd)) 
 	{
 		GEditor->EndTransaction();
 		return FMcpResponse::Success(ExtractOutput(Cmd.LogOutput));

@@ -1,9 +1,9 @@
 ﻿using UnrealAgent.Backend.Agent;
 using UnrealAgent.Backend.Agent.Middleware;
 using UnrealAgent.Backend.Auth;
+using UnrealAgent.Backend.ClaudeCode;
 using UnrealAgent.Backend.Command;
 using UnrealAgent.Backend.Command.Commands;
-using UnrealAgent.Backend.Mcp;
 using UnrealAgent.Backend.Model;
 using UnrealAgent.Backend.Model.Models;
 using UnrealAgent.Backend.Prompt;
@@ -63,6 +63,10 @@ Builder.Services.AddSingleton<TokenTracker>();
 Builder.Services.AddSingleton<ToolRegistry>();
 Builder.Services.AddSingleton<ToolExecutor>();
 
+// ── Claude Code(CLI) 모듈 ──
+Builder.Services.AddSingleton<ClaudeCliLocator>();
+Builder.Services.AddSingleton<CliMcpConfig>();
+
 // ── Command 모듈 ──
 Builder.Services.AddSingleton<CommandRegistry>();
 
@@ -94,32 +98,10 @@ App.Services.GetRequiredService<AgentSession>().Team.ParseArgs(args);
 App.Services.GetRequiredService<AuthConfig>().Load();
 App.Services.GetRequiredService<ModelSettings>().Load();
 
-// ── MCP 서버 연결 + 도구 등록 ──
-{
-    ToolRegistry Registry = App.Services.GetRequiredService<ToolRegistry>();
-    IHttpClientFactory HttpFactory = App.Services.GetRequiredService<IHttpClientFactory>();
-
-    foreach ((string Name, McpServerConfig Config) in McpConfig.Load())
-    {
-        HttpClient Http = HttpFactory.CreateClient();
-        McpClient Client = new(Http, Name, Config.Url);
-
-        try
-        {
-            await Client.InitializeAsync();
-
-            if (Client.HasTools)
-            {
-                List<McpToolDefinition> Tools = await Client.ListToolsAsync();
-                Registry.RegisterMcpTools(Name, Client, Tools);
-            }
-        }
-        catch (Exception Ex)
-        {
-            Console.WriteLine($"[MCP] {Name} 연결 실패: {Ex.Message}");
-        }
-    }
-}
+// ── CLI용 MCP 설정 파일 생성 ──
+// settings.local.json의 mcpServers를 claude CLI --mcp-config 형식으로 변환하여,
+// UE 에디터가 띄운 HTTP MCP 서버를 CLI가 직접 호출하도록 연결합니다.
+App.Services.GetRequiredService<CliMcpConfig>().Build();
 
 // ── 팀원 모드: iframe 임베딩 허용 ──
 if (App.Services.GetRequiredService<AgentSession>().Team.ParentPid is not null)

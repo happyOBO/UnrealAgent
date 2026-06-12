@@ -51,6 +51,16 @@ public sealed class ModelSettings(ModelRegistry Registry)
     /// 현재 설정에 맞는 Effort의 OutputConfig를 반환합니다.
     /// </summary>
     public OutputConfig GetEffort() => new() { Effort = Effort };
+
+    /// <summary>
+    /// claude CLI --effort 인자 값으로 변환합니다 (low/medium/high/xhigh/max).
+    /// 미지원 값은 high로 폴백합니다.
+    /// </summary>
+    public string GetCliEffort()
+    {
+        string E = CurrentEffort.ToString().ToLowerInvariant();
+        return E is "low" or "medium" or "high" or "xhigh" or "max" ? E : "high";
+    }
     
     /// <summary>
     /// 모델을 변경합니다.
