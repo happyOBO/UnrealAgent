@@ -50,6 +50,7 @@ public sealed class AgentLoop(
             ResumeSessionId = Session.ClaudeSessionId,
             WorkingDirectory = string.IsNullOrEmpty(AgentPaths.RootPath) ? null : AgentPaths.RootPath,
             ApiKey = Auth.ApiKey,
+            AllowCliSlashCommands = Input.bCliCommand,
         };
 
         // tool_use_id → 도구 이름 (tool_result에 이름을 채우기 위함)

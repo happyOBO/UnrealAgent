@@ -363,24 +363,27 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
     /// <summary>
     /// 스킬 목록을 시스템 프롬프트에 포함합니다. 스킬이 없으면 null을 반환합니다.
     /// disableModelInvocation인 스킬은 제외됩니다.
+    /// 스킬 본문 주입은 서버(SlashCommandMiddleware)가 수행하므로, 모델에는
+    /// 도구 호출이 아닌 /<skill-name> 안내만 제공합니다.
     /// </summary>
     private string? SkillListing()
     {
         string? Listing = SkillRegistry.GetSkillListingPrompt();
         if (Listing is null)
           return null;
-  
+
         return $"""
                 <system-reminder>
-                The following skills are available for use with the skill tool:
-  
+                The following project skills are available:
+
                 {Listing}
-  
-                /<skill-name> is shorthand for users to invoke a skill.
-                When executed, the skill gets expanded to a full prompt.
-                Use the skill tool to execute them.
-                IMPORTANT: Only use the skill tool for skills listed above — do not guess
-                or use built-in commands.
+
+                Skills are invoked by the user typing /<skill-name>. When invoked, the
+                skill's full instructions are injected into the user message — follow
+                them exactly.
+                You cannot invoke skills yourself and there is no skill tool. If the
+                user's request clearly matches a skill above, briefly suggest running
+                /<skill-name> instead of attempting the task without it.
                 </system-reminder>
                 """;
     }

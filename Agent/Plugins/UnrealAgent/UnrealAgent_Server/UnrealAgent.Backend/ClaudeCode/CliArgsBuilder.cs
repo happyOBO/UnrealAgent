@@ -29,7 +29,15 @@ public static class CliArgsBuilder
             "--model", Options.Model,
             // 시스템 프롬프트 전체 교체 (UnrealAgent 아이덴티티 유지)
             "--system-prompt-file", SystemPromptFilePath,
+            // --mcp-config로 지정한 서버만 사용 (사용자 개인 MCP 서버 차단)
+            "--strict-mcp-config",
         ];
+
+        // 사용자 개인 ~/.claude 스킬/슬래시 커맨드가 세션에 로드되는 것을 차단합니다.
+        // 스킬은 C#(SkillRegistry)에서 전개되므로 CLI 측 스킬은 불필요합니다.
+        // 단, /compact 위임 턴은 CLI 내장 커맨드가 필요하므로 격리를 해제합니다.
+        if (!Options.AllowCliSlashCommands)
+            Args.Add("--disable-slash-commands");
 
         // effort 레벨 (Haiku 등 미지원 모델은 호출부에서 null 전달)
         if (!string.IsNullOrEmpty(Options.Effort))
