@@ -1,4 +1,6 @@
-<!-- Effort 레벨 선택 버튼입니다. -->
+<!-- Effort 레벨 선택 버튼입니다. effort 미지원 모델에서는 숨깁니다. -->
+@if (bVisible)
+{
 <div class="flex items-center gap-2 relative">
     <span class="text-[9px] uppercase font-bold tracking-wider @EffortLabelClass transition-colors">Effort</span>
     <div class="flex bg-[#0f0f0f] rounded p-0.5 border border-[#333]">
@@ -18,3 +20,4 @@
         }
     </div>
 </div>
+}

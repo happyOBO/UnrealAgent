@@ -48,12 +48,8 @@
                     <!-- 우측: Thinking 토글, Effort 선택, 전송 버튼입니다. -->
                     <div class="flex items-center gap-3 pointer-events-auto">
                         
-                        <!-- Thinking 선택 -->
-                        <div class="flex items-center gap-3 bg-[#1a1a1a] px-2 py-1 rounded-sm border border-[#333]">
-                            <ThinkingToggle/>
-                            <div class="h-3 w-px bg-[#333]"></div>
-                            <EffortSelector />
-                        </div>
+                        <!-- Thinking/Effort 컨트롤 (모델 지원 여부에 따라 표시) -->
+                        <ThinkingControls />
 
                         <!-- 전송 버튼: 클릭 또는 Enter로 메시지를 보냅니다. -->
                         <button type="submit"

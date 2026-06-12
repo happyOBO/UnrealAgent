@@ -20,4 +20,10 @@ public interface IModel
 
     /// <summary>컨텍스트 윈도우 크기입니다.</summary>
     int ContextWindow { get; }
+
+    /// <summary>effort 파라미터 지원 여부입니다.</summary>
+    bool bSupportsEffort => true;
+
+    /// <summary>확장 사고 지원 방식입니다.</summary>
+    ThinkingSupport Thinking => ThinkingSupport.Toggle;
 }

@@ -5,7 +5,7 @@ namespace UnrealAgent.Backend.Model.Models;
 /// <summary>
 /// Claude Opus 4.6 모델 정의입니다.
 /// </summary>
-[AgentModel(Order = 0)]
+[AgentModel(Order = 1)]
 public sealed class Opus46 : IModel
 {
     public const string ModelId = "claude-opus-4-6";

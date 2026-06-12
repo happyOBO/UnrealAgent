@@ -32,14 +32,16 @@ public partial class ModelSelector
     /// <summary>모델별 아이콘 배경색입니다.</summary>
     private static string GetIconBg(IModel Model) => Model.DisplayName[0] switch
     {
+        'F' => "bg-[#553a1f]",
         'O' => "bg-[#444]",
         'S' => "bg-[#333]",
         _ => "bg-[#2a2a2a]"
     };
-    
+
     /// <summary>모델별 아이콘 글자색입니다.</summary>
     private static string GetIconColor(IModel Model) => Model.DisplayName[0] switch
     {
+        'F' => "text-[#f0c896]",
         'O' => "text-[#e0e0e0]",
         'S' => "text-[#aaa]",
         _ => "text-[#888]"

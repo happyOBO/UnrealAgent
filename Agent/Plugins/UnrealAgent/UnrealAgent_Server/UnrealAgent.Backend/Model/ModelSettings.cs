@@ -41,6 +41,26 @@ public sealed class ModelSettings(ModelRegistry Registry)
 
     /// <summary>컨텍스트 윈도우 크기입니다.</summary>
     public int ContextWindow => CurrentModel.ContextWindow;
+
+    /// <summary>현재 모델의 effort 지원 여부입니다.</summary>
+    public bool bSupportsEffort => CurrentModel.bSupportsEffort;
+
+    /// <summary>현재 모델의 확장 사고 지원 방식입니다.</summary>
+    public ThinkingSupport ThinkingSupport => CurrentModel.Thinking;
+
+    /// <summary>설정이 변경될 때 발생합니다. UI 컴포넌트들이 구독하여 갱신합니다.</summary>
+    public event Action? OnChanged;
+
+    /// <summary>
+    /// 현재 모델에서 실제로 적용될 확장 사고 여부입니다.
+    /// AlwaysOn 모델은 토글과 무관하게 항상 켜지고, Unsupported 모델은 항상 꺼집니다.
+    /// </summary>
+    public bool GetEffectiveThinking() => CurrentModel.Thinking switch
+    {
+        ThinkingSupport.AlwaysOn => true,
+        ThinkingSupport.Unsupported => false,
+        _ => bThinkingEnabled,
+    };
     
     /// <summary>
     /// 현재 설정에 맞는 ThinkingConfigParam을 반환합니다.
@@ -102,6 +122,8 @@ public sealed class ModelSettings(ModelRegistry Registry)
         };
 
         File.WriteAllText(ConfigPath, Root.ToJsonString(JsonOptions));
+
+        OnChanged?.Invoke();
     }
     
     /// <summary>

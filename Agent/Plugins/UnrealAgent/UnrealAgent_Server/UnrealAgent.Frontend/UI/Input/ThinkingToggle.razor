@@ -1,4 +1,6 @@
-<!-- Thinking 토글 스위치입니다. -->
+<!-- Thinking 토글 스위치입니다. 사고를 켜고 끌 수 없는 모델에서는 숨깁니다. -->
+@if (bVisible)
+{
 <label class="relative flex items-center cursor-pointer gap-2 group/toggle">
     <input type="checkbox" class="sr-only peer" checked="@Settings.bThinkingEnabled" @onchange="Toggle" />
     <span class="text-[9px] font-bold @LabelColorClass uppercase tracking-wider group-hover/toggle:text-white transition-colors mr-1">THINKING</span>
@@ -11,3 +13,4 @@
         <div class="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-[#151515]/90 border-b border-r border-[#333] rotate-45"></div>
     </div>
 </label>
+}

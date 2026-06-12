@@ -5,7 +5,7 @@ namespace UnrealAgent.Backend.Model.Models;
 /// <summary>
 /// Claude Sonnet 4.6 모델 정의입니다.
 /// </summary>
-[AgentModel(Order = 1)]
+[AgentModel(Order = 2)]
 public sealed class Sonnet46 : IModel
 {
     public const string ModelId = "claude-sonnet-4-6";

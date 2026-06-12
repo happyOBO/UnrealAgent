@@ -1,0 +1,12 @@
+<!-- Thinking 토글 + Effort 선택을 묶는 컨테이너입니다. 현재 모델이 지원하는 컨트롤만 표시합니다. -->
+@if (bShowThinking || bShowEffort)
+{
+<div class="flex items-center gap-3 bg-[#1a1a1a] px-2 py-1 rounded-sm border border-[#333]">
+    <ThinkingToggle/>
+    @if (bShowThinking && bShowEffort)
+    {
+    <div class="h-3 w-px bg-[#333]"></div>
+    }
+    <EffortSelector />
+</div>
+}

@@ -37,14 +37,12 @@ public sealed class AgentLoop(
             yield break;
         }
 
-        bool IsHaiku = ModelSettings.Model.Contains("haiku", StringComparison.OrdinalIgnoreCase);
-
         ClaudeRunOptions Options = new()
         {
             SystemPrompt = PromptBuilder.BuildSystemPrompt(Session),
             Model = ModelSettings.Model,
-            Effort = IsHaiku ? null : ModelSettings.GetCliEffort(),
-            ThinkingEnabled = !IsHaiku && ModelSettings.bThinkingEnabled,
+            Effort = ModelSettings.bSupportsEffort ? ModelSettings.GetCliEffort() : null,
+            ThinkingEnabled = ModelSettings.GetEffectiveThinking(),
             Mode = Session.Mode,
             McpConfigPath = McpConfig.Path,
             ResumeSessionId = Session.ClaudeSessionId,
