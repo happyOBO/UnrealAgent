@@ -34,12 +34,35 @@ struct FMcpResponse
 	UPROPERTY()
 	FString Error;
 
+	/** 이미지 결과(base64). 비어 있지 않으면 MCP image content 블록으로 직렬화됩니다. */
+	UPROPERTY()
+	FString ImageBase64;
+
+	/** 이미지 MIME 타입 (예: "image/jpeg", "image/png") */
+	UPROPERTY()
+	FString ImageMimeType;
+
+	/** 이미지 결과가 있는지 여부 */
+	bool HasImage() const { return !ImageBase64.IsEmpty(); }
+
 	/** 성공 응답을 생성합니다 */
 	static FMcpResponse Success(const FString& InResult)
 	{
 		FMcpResponse Response;
 		Response.bSuccess = true;
 		Response.Result = InResult;
+
+		return Response;
+	}
+
+	/** 이미지 성공 응답을 생성합니다 (base64 + MIME). InResult는 동반 텍스트(설명). */
+	static FMcpResponse SuccessImage(const FString& InImageBase64, const FString& InMimeType, const FString& InResult = FString())
+	{
+		FMcpResponse Response;
+		Response.bSuccess = true;
+		Response.Result = InResult;
+		Response.ImageBase64 = InImageBase64;
+		Response.ImageMimeType = InMimeType;
 
 		return Response;
 	}

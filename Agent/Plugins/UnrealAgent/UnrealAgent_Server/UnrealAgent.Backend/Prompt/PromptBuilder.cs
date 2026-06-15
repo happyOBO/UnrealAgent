@@ -12,21 +12,21 @@ namespace UnrealAgent.Backend.Prompt;
 /// </summary>
 public sealed class PromptBuilder(SkillRegistry SkillRegistry)
 {
-    /// <summary>빌더 체인의 각 섹션입니다. 토큰 측정 시 특정 섹션을 제외할 수 있습니다.</summary>
+    /// <summary>
+    /// 빌더 체인의 각 섹션입니다. 토큰 측정 시 특정 섹션을 제외할 수 있습니다.
+    /// 시스템 프롬프트는 --append-system-prompt-file로 Claude Code 기본 프롬프트에
+    /// 덧붙여지므로, 기본 프롬프트와 중복되는 범용 행동 규칙 섹션은 제거했습니다.
+    /// 여기에는 Unreal 도메인 고유 지침만 남깁니다.
+    /// </summary>
     [Flags]
     public enum Section
     {
         None           = 0,
         Identity       = 1 << 0,
-        System         = 1 << 1,
-        DoingTasks     = 1 << 2,
-        Proactiveness  = 1 << 3,
-        ToneAndStyle   = 1 << 4,
-        OutputEfficiency = 1 << 5,
-        ModeOverride   = 1 << 6,
-        UnrealAgentMd  = 1 << 7,
-        Skills         = 1 << 8,
-        All            = Identity | System | DoingTasks | Proactiveness | ToneAndStyle | OutputEfficiency | ModeOverride | UnrealAgentMd | Skills,
+        ModeOverride   = 1 << 1,
+        UnrealAgentMd  = 1 << 2,
+        Skills         = 1 << 3,
+        All            = Identity | ModeOverride | UnrealAgentMd | Skills,
     }
     
     // ── 시스템 프롬프트 구성 ──
@@ -56,69 +56,63 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
         AgentMode Mode = Session?.Mode ?? AgentMode.Normal;
       
         StringBuilder Sb = new();
-        
+
         if (!Skip.HasFlag(Section.Identity))
           Sb.AppendLine(Identity(Session));
-        
-        if (!Skip.HasFlag(Section.System))
-          Sb.AppendLine(System());
-        
+
         if (!Skip.HasFlag(Section.UnrealAgentMd))
         {
             string? Md = UnrealAgentMd();
             if (Md is not null)
               Sb.AppendLine(Md);
         }
-        
+
         if (!Skip.HasFlag(Section.ModeOverride))
         {
             string? ModeSec = ModeSection(Mode);
-              
+
             if (ModeSec is not null)
               Sb.AppendLine(ModeSec);
         }
-        
-        if (!Skip.HasFlag(Section.DoingTasks))
-          Sb.AppendLine(DoingTasks());
-        
-        if (!Skip.HasFlag(Section.Proactiveness))
-          Sb.AppendLine(Proactiveness());
-        
-        if (!Skip.HasFlag(Section.ToneAndStyle))
-          Sb.AppendLine(ToneAndStyle());
-        
-        if (!Skip.HasFlag(Section.OutputEfficiency))
-          Sb.AppendLine(OutputEfficiency());
-        
+
         if (!Skip.HasFlag(Section.Skills))
         {
             string? Skills = SkillListing();
-            
+
             if (Skills is not null)
               Sb.AppendLine(Skills);
         }
-        
+
         return Sb.ToString();
     }
     
     // ── 시스템 프롬프트 ──
     
     /// <summary>
-    /// AI 어시스턴트의 역할과 핵심 규칙을 정의합니다.
+    /// Unreal 도메인 역할 레이어를 정의합니다.
+    /// 이 텍스트는 Claude Code 기본 시스템 프롬프트에 append되므로, 범용 행동 규칙은
+    /// 기본 프롬프트에 맡기고 여기서는 Unreal 고유 규칙만 명시합니다.
     /// </summary>
     private static string Identity(AgentSession? Session)
     {
       string Base = """
-                    You are UnrealAgent, an AI assistant that controls Unreal Editor.
+                    # UnrealAgent — Unreal Editor Domain Layer
 
-                    You are an interactive agent that helps users with Unreal Engine level design,
-                    asset management, and editor automation tasks. Use the instructions below and
-                    the tools available to you to assist the user.
+                    You are operating inside the Unreal Editor through the UnrealAgent plugin.
+                    Its MCP tools (e.g. execute_python, capture_viewport) act on the LIVE editor
+                    state. In addition to your default capabilities, follow these Unreal-specific
+                    rules:
 
-                    IMPORTANT: You must NEVER guess actor names, asset paths, or property values.
-                    Always query the current state first.
-                    IMPORTANT: Before deleting assets or making bulk destructive changes (100+
-                    actors, project settings), always confirm with the user first.
+                    - NEVER guess actor names, asset paths, or property values. Query the current
+                      editor state first (list level actors, search assets, inspect properties)
+                      before acting on them.
+                    - Before deleting assets or making bulk destructive changes (100+ actors,
+                      project settings), confirm with the user first.
+                    - Prefer the `unreal` Python API over filesystem edits of .uasset files — direct
+                      file edits corrupt internal asset references.
+                    - After modifying the scene or an asset, verify the result (re-query state, or
+                      use capture_viewport for a visual check) before reporting success.
+                    - Respond in the same language as the user.
                     """;
 
       if (Session?.Team.ParentPid is null)
@@ -135,84 +129,7 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
                      - Do NOT create teams, spawn teammates, or shut down other teammates.
                      """;
     }
-    
-    /// <summary>
-    /// 시스템 레벨 동작 규칙을 정의합니다.
-    /// </summary>
-    private static string System() => """
-                                      # System
-                                      - All text you output outside of tool use is displayed to the user in the
-                                        chat panel. Output text to communicate with the user.
-                                      - Tool results may be truncated. If output is cut off, use more specific
-                                        queries or pagination.
-                                      - If a tool result starts with "ERROR:", analyze the cause and write a
-                                        corrected version. Do not retry the same code.
-                                      """;
-    
-    /// <summary>
-    /// 작업 수행 시 단계별 절차를 정의합니다.
-    /// </summary>
-    private static string DoingTasks() => """
-                                          # Doing tasks
-                                          1. Query current state — always verify before making changes
-                                          2. Plan the approach — for complex tasks, break into small steps
-                                          3. Execute one step at a time — one logical operation per tool call
-                                          4. Verify the result — confirm the operation succeeded
-                                          5. Report back concisely
 
-                                          - If your approach is blocked, consider alternative approaches or break the
-                                            problem down differently. Do not repeat the same failing code.
-                                          - Avoid over-engineering. Only do what the user asked.
-                                          """;
-    
-    /// <summary>
-    /// 능동적 행동의 범위를 정의합니다.
-    /// </summary>
-    private static string Proactiveness() => """
-                                             # Proactiveness
-                                             You are allowed to be proactive, but only when the user asks you to do
-                                             something. Strike a balance between:
-                                             1. Doing the right thing when asked, including taking follow-up actions
-                                             2. Not surprising the user with actions you take without asking
-
-                                             If the user asks how to approach something, answer their question first.
-                                             Do not immediately jump into taking actions.
-                                             """;
-    
-    /// <summary>
-    /// 응답 톤과 스타일 규칙을 정의합니다.
-    /// </summary>
-    private static string ToneAndStyle() => """
-                                            # Tone and style
-                                            - Respond in the same language as the user.
-                                            - Be concise. Do not explain what you are about to do — just do it.
-                                            - Do not add unnecessary preamble or postamble unless the user asks.
-                                            - Keep responses short — fewer than 4 lines (not including tool use),
-                                              unless the user asks for detail.
-                                            - If you cannot or will not help with something, do not explain why.
-                                              Offer alternatives if possible, otherwise keep to 1-2 sentences.
-                                            - Do not use emojis unless the user explicitly requests it.
-                                            """;
-    
-    /// <summary>
-    /// 출력 효율 규칙을 정의합니다. 간결하고 핵심적인 응답을 유도합니다.
-    /// </summary>
-    private static string OutputEfficiency() => """
-                                                # Output efficiency
-                                                IMPORTANT: Go straight to the point. Do not overdo it. Be extra concise.
-
-                                                Lead with the answer or action, not the reasoning. Skip filler words,
-                                                preamble, and unnecessary transitions. Do not restate what the user said
-                                                — just do it. When explaining, include only what is necessary.
-
-                                                Focus text output on:
-                                                - Decisions that need the user's input
-                                                - High-level status updates at natural milestones
-                                                - Errors or blockers that change the plan
-
-                                                If you can say it in one sentence, do not use three.
-                                                """;
-    
     /// <summary>
     /// 모드별 시스템 프롬프트 오버라이드를 반환합니다. Normal 모드는 null입니다.
     /// </summary>

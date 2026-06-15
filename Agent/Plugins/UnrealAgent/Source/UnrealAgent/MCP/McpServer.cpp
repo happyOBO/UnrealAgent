@@ -238,12 +238,27 @@ TSharedPtr<FJsonObject> UMcpServer::HandleToolsCall(int32 RequestId, const TShar
 
 	// MCP ToolCallResult 형식으로 변환합니다
 	// { "content": [{"type":"text","text":"..."}], "isError": bool }
-	const TSharedPtr<FJsonObject> ContentItem = MakeShared<FJsonObject>();
-	ContentItem->SetStringField(TEXT("type"), TEXT("text"));
-	ContentItem->SetStringField(TEXT("text"), ToolResponse.GetText());
-
 	TArray<TSharedPtr<FJsonValue>> ContentArray;
-	ContentArray.Add(MakeShared<FJsonValueObject>(ContentItem));
+
+	// 텍스트 블록 (이미지만 있고 동반 텍스트가 비면 생략)
+	const FString Text = ToolResponse.GetText();
+	if (!Text.IsEmpty() || !ToolResponse.HasImage())
+	{
+		const TSharedPtr<FJsonObject> ContentItem = MakeShared<FJsonObject>();
+		ContentItem->SetStringField(TEXT("type"), TEXT("text"));
+		ContentItem->SetStringField(TEXT("text"), Text);
+		ContentArray.Add(MakeShared<FJsonValueObject>(ContentItem));
+	}
+
+	// 이미지 블록 (있을 때만) — MCP image content: {"type":"image","data":<base64>,"mimeType":<mime>}
+	if (ToolResponse.HasImage())
+	{
+		const TSharedPtr<FJsonObject> ImageItem = MakeShared<FJsonObject>();
+		ImageItem->SetStringField(TEXT("type"), TEXT("image"));
+		ImageItem->SetStringField(TEXT("data"), ToolResponse.ImageBase64);
+		ImageItem->SetStringField(TEXT("mimeType"), ToolResponse.ImageMimeType);
+		ContentArray.Add(MakeShared<FJsonValueObject>(ImageItem));
+	}
 
 	const TSharedPtr<FJsonObject> Result = MakeShared<FJsonObject>();
 	Result->SetArrayField(TEXT("content"), ContentArray);

@@ -62,6 +62,8 @@ struct FExecutePythonTool : public FMcpTool
 			"  ask the user to narrow down.\n"
 			"- When inspecting properties, print only the relevant ones,\n"
 			"  not the full dir() output.\n"
+			"- After changing the scene/assets, you can call `capture_viewport` to\n"
+			"  visually verify the result.\n"
 			"\n"
 			"## Basic patterns\n"
 			"```python\n"

@@ -15,4 +15,11 @@ public sealed record UserInput(string Text, string? ImageMediaType = null, strin
     /// true면 해당 턴에서 CLI의 --disable-slash-commands 격리를 해제합니다.
     /// </summary>
     public bool bCliCommand { get; init; }
+
+    /// <summary>
+    /// 이 턴에 주입할 도메인 컨텍스트입니다 (ContextRegistry.MatchByKeywords 결과).
+    /// 사용자 텍스트 앞에 별도 text 블록으로 전송되며, 원문 텍스트는 변경하지 않습니다.
+    /// null이면 주입하지 않습니다.
+    /// </summary>
+    public string? InjectedContext { get; init; }
 }

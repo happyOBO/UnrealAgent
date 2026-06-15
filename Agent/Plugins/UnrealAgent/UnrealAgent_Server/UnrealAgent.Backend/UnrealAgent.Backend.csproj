@@ -7,6 +7,13 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <!-- UE 도메인 컨텍스트 문서를 출력 디렉터리 contexts/로 복사합니다 (ContextRegistry가 로드). -->
+      <Content Include="contexts\*.md">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="Anthropic" Version="12.8.0" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0-preview.4.26230.115" />
       <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="11.0.0-preview.4.26230.115" />

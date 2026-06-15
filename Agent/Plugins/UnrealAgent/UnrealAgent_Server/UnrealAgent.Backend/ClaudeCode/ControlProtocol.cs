@@ -49,6 +49,10 @@ public static class ControlProtocol
             });
         }
 
+        // 도메인 컨텍스트를 사용자 텍스트 앞에 별도 블록으로 주입합니다 (원문은 유지).
+        if (!string.IsNullOrEmpty(Input.InjectedContext))
+            Content.Add(new JsonObject { ["type"] = "text", ["text"] = Input.InjectedContext });
+
         Content.Add(new JsonObject { ["type"] = "text", ["text"] = Input.Text });
 
         JsonObject Root = new()

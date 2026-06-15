@@ -7,6 +7,7 @@ using UnrealAgent.Backend.Command.Commands;
 using UnrealAgent.Backend.Model;
 using UnrealAgent.Backend.Model.Models;
 using UnrealAgent.Backend.Prompt;
+using UnrealAgent.Backend.Prompt.Context;
 using UnrealAgent.Backend.Skill;
 using UnrealAgent.Backend.Token;
 using UnrealAgent.Backend.Tool;
@@ -58,6 +59,7 @@ Builder.Services.AddHostedService(Sp => Sp.GetRequiredService<AgentRunner>());
 // ── Runtime 모듈 ──
 Builder.Services.AddSingleton<PromptBuilder>();
 Builder.Services.AddSingleton<TokenTracker>();
+Builder.Services.AddSingleton<ContextRegistry>();
 
 // ── Tool 모듈 ──
 Builder.Services.AddSingleton<ToolRegistry>();
@@ -90,6 +92,9 @@ App.Services.GetRequiredService<CommandRegistry>().DiscoverCommands(typeof(Clear
 
 // ── 스킬 파일시스템 스캔 ──
 App.Services.GetRequiredService<SkillRegistry>().DiscoverSkills();
+
+// ── UE 도메인 컨텍스트 문서 스캔 ──
+App.Services.GetRequiredService<ContextRegistry>().DiscoverContexts();
 
 // ── 팀 인자 파싱 (팀원 모드일 때 TeamName, AgentName, ParentPid 설정) ──
 App.Services.GetRequiredService<AgentSession>().Team.ParseArgs(args);

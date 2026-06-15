@@ -6,6 +6,7 @@ using UnrealAgent.Backend.Conversation;
 using UnrealAgent.Backend.Core;
 using UnrealAgent.Backend.Model;
 using UnrealAgent.Backend.Prompt;
+using UnrealAgent.Backend.Prompt.Context;
 using UnrealAgent.Backend.Security;
 
 namespace UnrealAgent.Backend.Agent;
@@ -20,7 +21,8 @@ public sealed class AgentLoop(
     ModelSettings ModelSettings,
     ClaudeCliLocator Locator,
     CliMcpConfig McpConfig,
-    AuthConfig Auth)
+    AuthConfig Auth,
+    ContextRegistry ContextRegistry)
 {
     /// <summary>
     /// 사용자 메시지 1건에 대한 에이전트 루프를 실행합니다.
@@ -35,6 +37,15 @@ public sealed class AgentLoop(
                 "claude CLI를 찾을 수 없습니다. 'npm install -g @anthropic-ai/claude-code'로 설치하세요.");
             yield return new ChatEvent.Done();
             yield break;
+        }
+
+        // 사용자 메시지 키워드에 맞는 UE 도메인 컨텍스트를 골라 이 턴에 주입합니다.
+        // CLI 내장 커맨드(/compact 등) 턴은 주입하지 않습니다.
+        if (!Input.bCliCommand && Input.InjectedContext is null)
+        {
+            string? Context = ContextRegistry.MatchByKeywords(Input.Text);
+            if (Context is not null)
+                Input = Input with { InjectedContext = Context };
         }
 
         ClaudeRunOptions Options = new()

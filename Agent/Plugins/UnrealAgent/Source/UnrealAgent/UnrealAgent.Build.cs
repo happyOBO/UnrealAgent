@@ -34,7 +34,8 @@ public class UnrealAgent : ModuleRules
 			"HTTPServer",
 			"PythonScriptPlugin",
 			"DesktopPlatform",
-			"ImageWrapper"
+			"ImageWrapper",
+			"RenderCore"
 		]);
 	}
 }

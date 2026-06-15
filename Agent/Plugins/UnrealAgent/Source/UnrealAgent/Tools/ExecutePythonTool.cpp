@@ -43,17 +43,29 @@ FString FExecutePythonTool::ExtractOutput(const TArray<struct FPythonLogOutputEn
 {
 	FString Result;
 
+	// Info뿐 아니라 Warning/Error도 포함하여 모델이 스스로 문제를 진단/수정할 수 있게 합니다.
+	// Warning/Error에는 접두사를 붙여 일반 출력과 구분합니다.
 	for (const FPythonLogOutputEntry& Entry : LogOutput)
 	{
-		if (Entry.Type == EPythonLogOutputType::Info)
+		FString Prefix;
+		switch (Entry.Type)
 		{
-			if (!Result.IsEmpty())
-			{
-				Result += TEXT("\n");
-			}
-			
-			Result += Entry.Output;
+			case EPythonLogOutputType::Warning:
+				Prefix = TEXT("[WARNING] ");
+				break;
+			case EPythonLogOutputType::Error:
+				Prefix = TEXT("[ERROR] ");
+				break;
+			default:
+				break;
 		}
+
+		if (!Result.IsEmpty())
+		{
+			Result += TEXT("\n");
+		}
+
+		Result += Prefix + Entry.Output;
 	}
 
 	return Result;

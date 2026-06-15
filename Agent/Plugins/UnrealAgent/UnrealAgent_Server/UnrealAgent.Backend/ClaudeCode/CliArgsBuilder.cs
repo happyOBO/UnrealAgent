@@ -27,8 +27,9 @@ public static class CliArgsBuilder
             "--permission-mode", MapPermissionMode(Options.Mode),
             // 모델 선택
             "--model", Options.Model,
-            // 시스템 프롬프트 전체 교체 (UnrealAgent 아이덴티티 유지)
-            "--system-prompt-file", SystemPromptFilePath,
+            // Claude Code 기본 시스템 프롬프트를 유지하고 UnrealAgent 도메인 지침만 덧붙입니다.
+            // (전체 교체 --system-prompt-file → append로 전환: 기본 에이전트 역량 보존)
+            "--append-system-prompt-file", SystemPromptFilePath,
             // --mcp-config로 지정한 서버만 사용 (사용자 개인 MCP 서버 차단)
             "--strict-mcp-config",
         ];
