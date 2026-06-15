@@ -35,7 +35,13 @@ public class UnrealAgent : ModuleRules
 			"PythonScriptPlugin",
 			"DesktopPlatform",
 			"ImageWrapper",
-			"RenderCore"
+			"RenderCore",
+			"Kismet",
+			"KismetCompiler",
+			"BlueprintGraph",
+			"AnimGraph",
+			"AnimGraphRuntime",
+			"SubobjectDataInterface"
 		]);
 	}
 }

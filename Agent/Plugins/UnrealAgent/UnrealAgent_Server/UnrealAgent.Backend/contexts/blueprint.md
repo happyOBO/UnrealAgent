@@ -18,7 +18,18 @@ keywords:
   - compile blueprint
 ---
 
-**중요한 한계:** Python `unreal` API로는 블루프린트의 **노드 그래프(이벤트 그래프/함수 그래프)를 편집할 수 없다.** 노드 추가·핀 연결은 노출돼 있지 않다. 에셋 생성, 변수 추가, 컴포넌트 추가, 부모 클래스 변경, 컴파일 정도만 가능하다. 그래프 로직이 필요하면 그 한계를 사용자에게 알리고 대안(C++ 베이스 클래스, 수동 작업)을 제시한다.
+**노드 그래프 편집은 Python이 아니라 `blueprint_modify` 네이티브 도구를 사용한다.** Python `unreal` API로는 이벤트 그래프의 노드 추가·핀 연결이 불가능하므로, 그래프 로직 작업에는 반드시 `blueprint_modify` 도구를 쓴다:
+- `add_node` (node_type: CallFunction/Event/VariableGet/VariableSet/Branch/Sequence) → 반환된 node_id를 이후 연결에 사용
+- `connect_pins` (핀명이 비면 exec 핀 자동), `set_pin_value`, `delete_node`, `disconnect_pins`, `list_nodes`
+- 각 연산 후 자동 컴파일·저장됨
+
+전형적 흐름: `add_node`(Event BeginPlay) → `add_node`(CallFunction PrintString) → `connect_pins`(exec) → `set_pin_value`(InString) → 완료.
+
+**컴포넌트 추가도 `blueprint_modify`의 `add_component`를 쓴다 — Python으로 `SubobjectDataSubsystem`을 직접 다루지 말 것.** Python SCS 조작은 API가 까다로워 중복 컴포넌트 생성·에디터 hang을 유발한다. 대신:
+- `add_component`: `component_type`(예: StaticMeshComponent) + 선택 `component_name` + 선택 `static_mesh`(에셋 경로). 메시까지 한 번에 설정됨.
+- 도구가 실패를 반환하면(예: 클래스/메시 미발견) **그 사유를 사용자에게 그대로 안내**하고, 같은 작업을 Python으로 우회 시도하지 말 것.
+
+에셋 생성·변수 추가·부모 클래스 변경 등 비(非)그래프 작업은 아래 Python으로도 가능하다.
 
 ```python
 import unreal

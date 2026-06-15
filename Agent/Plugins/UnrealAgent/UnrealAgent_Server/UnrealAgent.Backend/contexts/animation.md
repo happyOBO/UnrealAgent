@@ -21,7 +21,16 @@ keywords:
   - retarget
 ---
 
-**한계:** 애님 블루프린트의 **스테이트 머신·블렌드 그래프 노드 편집은 Python으로 불가**하다. 가능한 것은 애님 시퀀스 조회, 노티파이 추가, 몽타주 생성, 커브 조작 등 데이터 수준 작업이다.
+**스테이트 머신 구성은 Python이 아니라 `anim_blueprint_modify` 네이티브 도구를 사용한다.** Python으로는 애님 BP 그래프 편집이 불가능하다. 스테이트 머신 골격은 이 도구로 구성한다:
+- `create_state_machine` (state_machine 이름; AnimGraph 출력 포즈에 자동 연결)
+- `add_state` (state_machine, state_name)
+- `set_state_animation` (state_machine, state_name, anim_sequence 경로)
+- `set_entry_state` (진입 스테이트)
+- `add_transition` (from_state, to_state; 조건 그래프는 비어 있게 생성 — 조건 설정은 후속)
+
+전형적 흐름: `create_state_machine` → `add_state`×2 → 각 스테이트 `set_state_animation` → `set_entry_state` → `add_transition`.
+
+애님 시퀀스 조회, 노티파이 추가, 몽타주 생성, 커브 조작 등 데이터 수준 작업은 아래 Python으로 가능하다.
 
 ```python
 import unreal

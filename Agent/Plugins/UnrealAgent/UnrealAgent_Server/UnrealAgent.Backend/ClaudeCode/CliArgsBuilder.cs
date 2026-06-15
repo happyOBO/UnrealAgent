@@ -67,8 +67,11 @@ public static class CliArgsBuilder
     /// <summary>AgentMode를 CLI --permission-mode 값으로 매핑합니다.</summary>
     public static string MapPermissionMode(AgentMode Mode) => Mode switch
     {
-        // 모든 도구 자동 승인 → 권한 검사 우회
-        AgentMode.Edit => "bypassPermissions",
+        // Edit 모드도 default로 둔다. bypassPermissions는 permission-prompt-tool을
+        // 호출하지 않아 PermissionEngine 가드(플러그인/프로젝트 밖 편집 차단)가 무력화되므로,
+        // default를 써서 가드가 항상 동작하게 한다. 비보호 도구는 PermissionEngine이
+        // Edit 모드에서 자동 Allow하므로 사용자 프롬프트는 발생하지 않는다.
+        AgentMode.Edit => "default",
         // 계획 전용 (도구 실행 차단)
         AgentMode.Plan => "plan",
         // 기본: 권한 필요한 도구는 can_use_tool로 사용자에게 확인
