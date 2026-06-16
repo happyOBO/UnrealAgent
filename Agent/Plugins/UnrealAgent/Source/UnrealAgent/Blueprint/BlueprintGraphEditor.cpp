@@ -350,18 +350,52 @@ UClass* FBlueprintGraphEditor::ResolveClass(const FString& ClassName)
 	if (ClassName.IsEmpty())
 		return nullptr;
 
-	// 앞에 U/A/F 등 접두사가 붙어 와도 허용 (UClass 오브젝트명은 접두사 없음).
-	FString Name = ClassName;
-	if (Name.Len() > 1 && FChar::IsUpper(Name[0]) && FChar::IsUpper(Name[1])
-		&& (Name[0] == TEXT('U') || Name[0] == TEXT('A') || Name[0] == TEXT('F')))
+	// 1) 경로 형태(/Script/... 또는 /Game/...): 직접 로드.
+	if (ClassName.Contains(TEXT("/")))
 	{
-		Name.RightChopInline(1);
+		// 클래스 오브젝트 경로 (예: /Script/Shooter.GachavivalCharacter, /Game/.../BP.BP_C)
+		if (UClass* C = LoadObject<UClass>(nullptr, *ClassName))
+			return C;
+		// 블루프린트 에셋 경로 (예: /Game/.../BP_GachavivalCharacter) → GeneratedClass.
+		if (UBlueprint* BP = LoadObject<UBlueprint>(nullptr, *ClassName))
+			if (BP->GeneratedClass)
+				return BP->GeneratedClass;
+		// _C 접미사 없는 클래스 경로 보정: /Game/Dir/BP_X → /Game/Dir/BP_X.BP_X_C
+		if (!ClassName.EndsWith(TEXT("_C")) && !ClassName.Contains(TEXT(".")))
+		{
+			int32 SlashIdx = INDEX_NONE;
+			ClassName.FindLastChar(TEXT('/'), SlashIdx);
+			const FString Leaf = (SlashIdx != INDEX_NONE) ? ClassName.RightChop(SlashIdx + 1) : ClassName;
+			const FString GeneratedPath = FString::Printf(TEXT("%s.%s_C"), *ClassName, *Leaf);
+			if (UClass* C = LoadObject<UClass>(nullptr, *GeneratedPath))
+				return C;
+		}
+		return nullptr;
 	}
 
-	UClass* Found = FindFirstObject<UClass>(*Name, EFindFirstObjectOptions::None);
-	if (!Found)
-		Found = FindFirstObject<UClass>(*ClassName, EFindFirstObjectOptions::None);
-	return Found;
+	// 2) 단축명 (네이티브/로드된 클래스): TryFindTypeSlow가 접두사 유무를 모두 처리합니다.
+	if (UClass* C = UClass::TryFindTypeSlow<UClass>(ClassName))
+		return C;
+
+	// 3) U/A/F 접두사 제거 후 재시도.
+	FString Stripped = ClassName;
+	if (Stripped.Len() > 1 && FChar::IsUpper(Stripped[1])
+		&& (Stripped[0] == TEXT('U') || Stripped[0] == TEXT('A') || Stripped[0] == TEXT('F')))
+	{
+		Stripped.RightChopInline(1);
+		if (UClass* C = UClass::TryFindTypeSlow<UClass>(Stripped))
+			return C;
+	}
+
+	// 4) 블루프린트 생성 클래스 단축명 보정 (BP_X → BP_X_C).
+	if (!ClassName.EndsWith(TEXT("_C")))
+	{
+		if (UClass* C = UClass::TryFindTypeSlow<UClass>(ClassName + TEXT("_C")))
+			return C;
+	}
+
+	// 5) 최후 폴백.
+	return FindFirstObject<UClass>(*ClassName, EFindFirstObjectOptions::None);
 }
 
 FMulticastDelegateProperty* FBlueprintGraphEditor::FindMulticastDelegateProperty(UClass* Owner, const FString& PropertyName)
@@ -700,9 +734,22 @@ bool FBlueprintGraphEditor::ConnectPins(UEdGraph* Graph, const FString& SourceNo
 			OutError = FString::Printf(TEXT("Cannot connect pins: %s"), *Response.Message.ToString());
 			return false;
 		}
+
+		// TryCreateConnection은 링크 생성 + 양쪽 노드의 PinConnectionListChanged 콜백 호출 +
+		// 필요 시 변환 노드 삽입을 모두 수행합니다. 원시 MakeLinkTo는 콜백을 건너뛰어
+		// Cast/와일드카드 노드가 핀 타입을 재해석하지 못합니다(Object 핀이 wildcard로 남는 버그).
+		if (!Schema->TryCreateConnection(SourcePin, TargetPin))
+		{
+			OutError = FString::Printf(TEXT("Failed to connect '%s.%s' -> '%s.%s'"),
+				*SourceNodeId, *SourcePin->PinName.ToString(), *TargetNodeId, *TargetPin->PinName.ToString());
+			return false;
+		}
+	}
+	else
+	{
+		SourcePin->MakeLinkTo(TargetPin);
 	}
 
-	SourcePin->MakeLinkTo(TargetPin);
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(FBlueprintEditorUtils::FindBlueprintForGraph(Graph));
 	return true;
 }
