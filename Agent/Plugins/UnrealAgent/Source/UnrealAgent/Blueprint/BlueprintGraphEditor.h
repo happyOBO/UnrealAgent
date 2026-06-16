@@ -6,7 +6,10 @@ class UBlueprint;
 class UEdGraph;
 class UEdGraphNode;
 class UEdGraphPin;
+class UClass;
 class FJsonObject;
+class FMulticastDelegateProperty;
+struct FEdGraphPinType;
 
 /**
  * 블루프린트 노드 그래프 편집 헬퍼입니다.
@@ -32,10 +35,20 @@ public:
 	/**
 	 * 노드를 생성하여 그래프에 추가합니다.
 	 * NodeType: CallFunction | Event | VariableGet | VariableSet | Branch | Sequence
-	 * NodeParams: 타입별 추가 인자 (function/target_class/event/variable/num_outputs)
+	 *         | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate
+	 * NodeParams: 타입별 추가 인자 (function/target_class/event/variable/num_outputs/
+	 *             component/delegate_property/delegate_owner/bound_function)
 	 */
 	static UEdGraphNode* CreateNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& NodeType,
 		const TSharedPtr<FJsonObject>& NodeParams, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError);
+
+	/**
+	 * 함수 그래프에 사용자 정의 입출력 파라미터를 추가합니다.
+	 * bIsOutput=false → FunctionEntry의 출력 핀(입력 파라미터), true → FunctionResult의 입력 핀(반환값).
+	 * FunctionResult 노드가 없으면 생성합니다. ParamType은 MakePinType 규칙을 따릅니다.
+	 */
+	static bool AddFunctionParam(UEdGraph* FuncGraph, const FString& ParamName, const FString& ParamType,
+		bool bIsOutput, FString& OutError);
 
 	/** 두 노드의 핀을 연결합니다. 핀 이름이 비면 exec 핀을 자동 선택합니다. */
 	static bool ConnectPins(UEdGraph* Graph, const FString& SourceNodeId, const FString& SourcePinName,
@@ -78,6 +91,18 @@ private:
 	static UEdGraphNode* CreateVariableNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& VariableName, bool bSetter, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateBranchNode(UEdGraph* Graph, int32 PosX, int32 PosY);
 	static UEdGraphNode* CreateSequenceNode(UEdGraph* Graph, int32 PosX, int32 PosY);
+	static UEdGraphNode* CreateCastNode(UEdGraph* Graph, const FString& TargetClass, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateCustomEventNode(UEdGraph* Graph, const FString& EventName, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateFunctionResultNode(UEdGraph* Graph, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateComponentBoundEventNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& ComponentName, const FString& DelegateProperty, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateDelegateNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& NodeType, const FString& DelegateProperty, const FString& DelegateOwner, const FString& BoundFunction, int32 PosX, int32 PosY, FString& OutError);
+
+	/** 클래스 이름을 UClass로 해석합니다 (Kismet 별칭 + 전역 검색). 실패 시 nullptr. */
+	static UClass* ResolveClass(const FString& ClassName);
+	/** Owner 클래스에서 멀티캐스트 델리게이트 프로퍼티를 찾습니다. */
+	static FMulticastDelegateProperty* FindMulticastDelegateProperty(UClass* Owner, const FString& PropertyName);
+	/** 타입 문자열을 FEdGraphPinType으로 변환합니다 (bool/int/float/string/<Class>/<Struct> 등). */
+	static bool MakePinType(const FString& TypeStr, struct FEdGraphPinType& OutPinType, FString& OutError);
 
 	static UEdGraphPin* FindPinByName(UEdGraphNode* Node, const FString& PinName, int32 Direction);
 	static UEdGraphPin* GetExecPin(UEdGraphNode* Node, bool bOutput);

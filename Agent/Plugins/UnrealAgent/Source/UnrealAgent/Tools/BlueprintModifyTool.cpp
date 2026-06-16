@@ -14,14 +14,24 @@ FString FBlueprintModifyTool::ToolDescription() const
 		"\n"
 		"- add_node: node_type + node fields, [pos_x], [pos_y], [graph_name], [is_function_graph]\n"
 		"    node_type = CallFunction | Event | VariableGet | VariableSet | Branch | Sequence\n"
+		"              | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate\n"
 		"    CallFunction: function, [target_class] (KismetSystemLibrary|KismetMathLibrary|GameplayStatics|<Class>)\n"
 		"    Event: event (BeginPlay|Tick|EndPlay|<ParentFunc>)\n"
 		"    VariableGet/VariableSet: variable\n"
 		"    Sequence: [num_outputs]\n"
+		"    Cast: target_class (class to cast to, e.g. PlayerController)\n"
+		"    CustomEvent: event (the new custom event name)\n"
+		"    FunctionResult: (function graph only; pairs with add_function_param output)\n"
+		"    ComponentBoundEvent: component + delegate_property (e.g. component=BtnOk, delegate_property=OnClicked) — ideal for UMG button clicks\n"
+		"    AddDelegate/RemoveDelegate: delegate_property, [delegate_owner] (empty = self). Connect the target object + event via connect_pins.\n"
+		"    CreateDelegate: bound_function (function/event name to wrap)\n"
 		"    Returns the created node_id (use it for connect_pins/set_pin_value).\n"
 		"- add_component: component_type (e.g. StaticMeshComponent), [component_name], [static_mesh asset path]\n"
 		"    Adds a component to the Blueprint's component hierarchy. Use this instead of Python\n"
 		"    SubobjectDataSubsystem for components. For a static mesh, pass static_mesh to set it in one call.\n"
+		"- add_function_param: param_name, param_type, [direction=input|output], [graph_name] (forces function graph)\n"
+		"    Adds an input (FunctionEntry) or output/return (FunctionResult) parameter to a function graph.\n"
+		"    param_type = bool|int|int64|float|double|string|name|text|<ClassName>|<StructName>\n"
 		"- connect_pins: source_node, source_pin, target_node, target_pin (empty pin name = exec pin auto)\n"
 		"- disconnect_pins: source_node, source_pin, target_node, target_pin\n"
 		"- set_pin_value: node_id, pin, value\n"
@@ -60,6 +70,32 @@ FMcpResponse FBlueprintModifyTool::Execute()
 		return bComp ? FMcpResponse::Success(Out) : FMcpResponse::Failure(Out);
 	}
 
+	// ── add_function_param: 함수 그래프 시그니처 편집 (항상 함수 그래프를 대상으로) ──
+	if (Operation.Equals(TEXT("add_function_param"), ESearchCase::IgnoreCase))
+	{
+		if (ParamName.IsEmpty())
+			return FMcpResponse::Failure(TEXT("add_function_param requires 'param_name'"));
+		if (ParamType.IsEmpty())
+			return FMcpResponse::Failure(TEXT("add_function_param requires 'param_type'"));
+
+		UEdGraph* FuncGraph = FBlueprintGraphEditor::FindGraph(Blueprint, GraphName, /*bFunctionGraph*/true, Error);
+		if (!FuncGraph)
+			return FMcpResponse::Failure(Error);
+
+		const bool bIsOutput = Direction.Equals(TEXT("output"), ESearchCase::IgnoreCase)
+			|| Direction.Equals(TEXT("out"), ESearchCase::IgnoreCase)
+			|| Direction.Equals(TEXT("return"), ESearchCase::IgnoreCase);
+
+		if (!FBlueprintGraphEditor::AddFunctionParam(FuncGraph, ParamName, ParamType, bIsOutput, Error))
+			return FMcpResponse::Failure(Error);
+
+		bool bOk = false;
+		const FString Msg = FBlueprintGraphEditor::CompileAndSave(Blueprint, bOk);
+		const FString Out = FString::Printf(TEXT("Added %s param '%s' (%s).\n"),
+			bIsOutput ? TEXT("output") : TEXT("input"), *ParamName, *ParamType) + Msg;
+		return bOk ? FMcpResponse::Success(Out) : FMcpResponse::Failure(Out);
+	}
+
 	UEdGraph* Graph = FBlueprintGraphEditor::FindGraph(Blueprint, GraphName, bIsFunctionGraph, Error);
 	if (!Graph)
 		return FMcpResponse::Failure(Error);
@@ -79,11 +115,15 @@ FMcpResponse FBlueprintModifyTool::Execute()
 
 		// 선언된 flat 필드로부터 노드 파라미터를 조립합니다.
 		const TSharedPtr<FJsonObject> NodeParams = MakeShared<FJsonObject>();
-		if (!Function.IsEmpty())    NodeParams->SetStringField(TEXT("function"), Function);
-		if (!TargetClass.IsEmpty()) NodeParams->SetStringField(TEXT("target_class"), TargetClass);
-		if (!Event.IsEmpty())       NodeParams->SetStringField(TEXT("event"), Event);
-		if (!Variable.IsEmpty())    NodeParams->SetStringField(TEXT("variable"), Variable);
-		if (NumOutputs > 0)         NodeParams->SetNumberField(TEXT("num_outputs"), NumOutputs);
+		if (!Function.IsEmpty())          NodeParams->SetStringField(TEXT("function"), Function);
+		if (!TargetClass.IsEmpty())       NodeParams->SetStringField(TEXT("target_class"), TargetClass);
+		if (!Event.IsEmpty())             NodeParams->SetStringField(TEXT("event"), Event);
+		if (!Variable.IsEmpty())          NodeParams->SetStringField(TEXT("variable"), Variable);
+		if (NumOutputs > 0)               NodeParams->SetNumberField(TEXT("num_outputs"), NumOutputs);
+		if (!Component.IsEmpty())         NodeParams->SetStringField(TEXT("component"), Component);
+		if (!DelegateProperty.IsEmpty())  NodeParams->SetStringField(TEXT("delegate_property"), DelegateProperty);
+		if (!DelegateOwner.IsEmpty())     NodeParams->SetStringField(TEXT("delegate_owner"), DelegateOwner);
+		if (!BoundFunction.IsEmpty())     NodeParams->SetStringField(TEXT("bound_function"), BoundFunction);
 
 		FString OutNodeId;
 		UEdGraphNode* Node = FBlueprintGraphEditor::CreateNode(Graph, Blueprint, NodeType, NodeParams, PosX, PosY, OutNodeId, Error);

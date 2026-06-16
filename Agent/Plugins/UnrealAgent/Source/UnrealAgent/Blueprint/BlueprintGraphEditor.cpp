@@ -12,6 +12,15 @@
 #include "K2Node_VariableSet.h"
 #include "K2Node_IfThenElse.h"
 #include "K2Node_ExecutionSequence.h"
+#include "K2Node_DynamicCast.h"
+#include "K2Node_CustomEvent.h"
+#include "K2Node_FunctionResult.h"
+#include "K2Node_FunctionEntry.h"
+#include "K2Node_ComponentBoundEvent.h"
+#include "K2Node_AddDelegate.h"
+#include "K2Node_RemoveDelegate.h"
+#include "K2Node_CreateDelegate.h"
+#include "K2Node_EditablePinBase.h"
 
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
@@ -32,6 +41,8 @@
 #include "Serialization/JsonWriter.h"
 #include "HAL/PlatformAtomics.h"
 #include "UObject/UObjectGlobals.h"
+#include "UObject/UnrealType.h"
+#include "UObject/Class.h"
 
 int32 FBlueprintGraphEditor::NodeIdCounter = 0;
 const TCHAR* FBlueprintGraphEditor::NodeIdPrefix = TEXT("UA_ID:");
@@ -142,9 +153,42 @@ UEdGraphNode* FBlueprintGraphEditor::CreateNode(UEdGraph* Graph, UBlueprint* Blu
 	{
 		NewNode = CreateSequenceNode(Graph, PosX, PosY);
 	}
+	else if (NodeType.Equals(TEXT("Cast"), ESearchCase::IgnoreCase) || NodeType.Equals(TEXT("DynamicCast"), ESearchCase::IgnoreCase))
+	{
+		FString TargetClass;
+		Params->TryGetStringField(TEXT("target_class"), TargetClass);
+		NewNode = CreateCastNode(Graph, TargetClass, PosX, PosY, OutError);
+	}
+	else if (NodeType.Equals(TEXT("CustomEvent"), ESearchCase::IgnoreCase))
+	{
+		FString EventName;
+		Params->TryGetStringField(TEXT("event"), EventName);
+		NewNode = CreateCustomEventNode(Graph, EventName, PosX, PosY, OutError);
+	}
+	else if (NodeType.Equals(TEXT("FunctionResult"), ESearchCase::IgnoreCase) || NodeType.Equals(TEXT("Return"), ESearchCase::IgnoreCase))
+	{
+		NewNode = CreateFunctionResultNode(Graph, PosX, PosY, OutError);
+	}
+	else if (NodeType.Equals(TEXT("ComponentBoundEvent"), ESearchCase::IgnoreCase))
+	{
+		FString Component, DelegateProperty;
+		Params->TryGetStringField(TEXT("component"), Component);
+		Params->TryGetStringField(TEXT("delegate_property"), DelegateProperty);
+		NewNode = CreateComponentBoundEventNode(Graph, Blueprint, Component, DelegateProperty, PosX, PosY, OutError);
+	}
+	else if (NodeType.Equals(TEXT("AddDelegate"), ESearchCase::IgnoreCase)
+		|| NodeType.Equals(TEXT("RemoveDelegate"), ESearchCase::IgnoreCase)
+		|| NodeType.Equals(TEXT("CreateDelegate"), ESearchCase::IgnoreCase))
+	{
+		FString DelegateProperty, DelegateOwner, BoundFunction;
+		Params->TryGetStringField(TEXT("delegate_property"), DelegateProperty);
+		Params->TryGetStringField(TEXT("delegate_owner"), DelegateOwner);
+		Params->TryGetStringField(TEXT("bound_function"), BoundFunction);
+		NewNode = CreateDelegateNode(Graph, Blueprint, NodeType, DelegateProperty, DelegateOwner, BoundFunction, PosX, PosY, OutError);
+	}
 	else
 	{
-		OutError = FString::Printf(TEXT("Unknown node_type '%s'. Supported: CallFunction, Event, VariableGet, VariableSet, Branch, Sequence"), *NodeType);
+		OutError = FString::Printf(TEXT("Unknown node_type '%s'. Supported: CallFunction, Event, VariableGet, VariableSet, Branch, Sequence, Cast, CustomEvent, FunctionResult, ComponentBoundEvent, AddDelegate, RemoveDelegate, CreateDelegate"), *NodeType);
 		return nullptr;
 	}
 
@@ -299,6 +343,327 @@ UEdGraphNode* FBlueprintGraphEditor::CreateSequenceNode(UEdGraph* Graph, int32 P
 	SeqNode->NodePosY = PosY;
 	NodeCreator.Finalize();
 	return SeqNode;
+}
+
+UClass* FBlueprintGraphEditor::ResolveClass(const FString& ClassName)
+{
+	if (ClassName.IsEmpty())
+		return nullptr;
+
+	// 앞에 U/A/F 등 접두사가 붙어 와도 허용 (UClass 오브젝트명은 접두사 없음).
+	FString Name = ClassName;
+	if (Name.Len() > 1 && FChar::IsUpper(Name[0]) && FChar::IsUpper(Name[1])
+		&& (Name[0] == TEXT('U') || Name[0] == TEXT('A') || Name[0] == TEXT('F')))
+	{
+		Name.RightChopInline(1);
+	}
+
+	UClass* Found = FindFirstObject<UClass>(*Name, EFindFirstObjectOptions::None);
+	if (!Found)
+		Found = FindFirstObject<UClass>(*ClassName, EFindFirstObjectOptions::None);
+	return Found;
+}
+
+FMulticastDelegateProperty* FBlueprintGraphEditor::FindMulticastDelegateProperty(UClass* Owner, const FString& PropertyName)
+{
+	if (!Owner || PropertyName.IsEmpty())
+		return nullptr;
+
+	const FName PropName(*PropertyName);
+	for (TFieldIterator<FMulticastDelegateProperty> It(Owner); It; ++It)
+	{
+		if (It->GetFName() == PropName)
+			return *It;
+	}
+	return nullptr;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateCastNode(UEdGraph* Graph, const FString& TargetClass, int32 PosX, int32 PosY, FString& OutError)
+{
+	UClass* CastTo = ResolveClass(TargetClass);
+	if (!CastTo)
+	{
+		OutError = FString::Printf(TEXT("Cast requires a valid target_class. '%s' not found."), *TargetClass);
+		return nullptr;
+	}
+
+	FGraphNodeCreator<UK2Node_DynamicCast> NodeCreator(*Graph);
+	UK2Node_DynamicCast* CastNode = NodeCreator.CreateNode();
+	CastNode->TargetType = CastTo;
+	CastNode->SetPurity(false);
+	CastNode->NodePosX = PosX;
+	CastNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+	return CastNode;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateCustomEventNode(UEdGraph* Graph, const FString& EventName, int32 PosX, int32 PosY, FString& OutError)
+{
+	if (EventName.IsEmpty())
+	{
+		OutError = TEXT("CustomEvent requires 'event' (the custom event name)");
+		return nullptr;
+	}
+
+	FGraphNodeCreator<UK2Node_CustomEvent> NodeCreator(*Graph);
+	UK2Node_CustomEvent* EventNode = NodeCreator.CreateNode();
+	EventNode->CustomFunctionName = FName(*EventName);
+	EventNode->bIsEditable = true;
+	EventNode->NodePosX = PosX;
+	EventNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+	return EventNode;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateFunctionResultNode(UEdGraph* Graph, int32 PosX, int32 PosY, FString& OutError)
+{
+	// FunctionResult는 함수 그래프에만 의미가 있습니다.
+	bool bHasEntry = false;
+	for (UEdGraphNode* Node : Graph->Nodes)
+	{
+		if (Cast<UK2Node_FunctionEntry>(Node)) { bHasEntry = true; break; }
+	}
+	if (!bHasEntry)
+	{
+		OutError = TEXT("FunctionResult can only be added to a function graph (no FunctionEntry found). Use is_function_graph=true and a function graph_name.");
+		return nullptr;
+	}
+
+	FGraphNodeCreator<UK2Node_FunctionResult> NodeCreator(*Graph);
+	UK2Node_FunctionResult* ResultNode = NodeCreator.CreateNode();
+	ResultNode->NodePosX = PosX;
+	ResultNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+	return ResultNode;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateComponentBoundEventNode(UEdGraph* Graph, UBlueprint* Blueprint,
+	const FString& ComponentName, const FString& DelegateProperty, int32 PosX, int32 PosY, FString& OutError)
+{
+	if (ComponentName.IsEmpty() || DelegateProperty.IsEmpty())
+	{
+		OutError = TEXT("ComponentBoundEvent requires 'component' and 'delegate_property' (e.g. component=BtnOk, delegate_property=OnClicked)");
+		return nullptr;
+	}
+	if (!Blueprint || !Blueprint->GeneratedClass)
+	{
+		OutError = TEXT("Blueprint has no generated class (compile it first)");
+		return nullptr;
+	}
+
+	// 컴포넌트/위젯은 BP 생성 클래스의 ObjectProperty로 노출됩니다.
+	UClass* OwnerClass = Blueprint->GeneratedClass;
+	FObjectProperty* ComponentProp = FindFProperty<FObjectProperty>(OwnerClass, FName(*ComponentName));
+	if (!ComponentProp)
+	{
+		OutError = FString::Printf(TEXT("Component/widget property '%s' not found on the Blueprint class"), *ComponentName);
+		return nullptr;
+	}
+
+	FMulticastDelegateProperty* DelegateProp = FindMulticastDelegateProperty(ComponentProp->PropertyClass, DelegateProperty);
+	if (!DelegateProp)
+	{
+		OutError = FString::Printf(TEXT("Multicast delegate '%s' not found on '%s'"), *DelegateProperty, *ComponentProp->PropertyClass->GetName());
+		return nullptr;
+	}
+
+	FGraphNodeCreator<UK2Node_ComponentBoundEvent> NodeCreator(*Graph);
+	UK2Node_ComponentBoundEvent* BoundNode = NodeCreator.CreateNode();
+	BoundNode->InitializeComponentBoundEventParams(ComponentProp, DelegateProp);
+	BoundNode->NodePosX = PosX;
+	BoundNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+	return BoundNode;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateDelegateNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& NodeType,
+	const FString& DelegateProperty, const FString& DelegateOwner, const FString& BoundFunction, int32 PosX, int32 PosY, FString& OutError)
+{
+	if (NodeType.Equals(TEXT("CreateDelegate"), ESearchCase::IgnoreCase))
+	{
+		FGraphNodeCreator<UK2Node_CreateDelegate> NodeCreator(*Graph);
+		UK2Node_CreateDelegate* DelegateNode = NodeCreator.CreateNode();
+		DelegateNode->NodePosX = PosX;
+		DelegateNode->NodePosY = PosY;
+		NodeCreator.Finalize();
+		if (!BoundFunction.IsEmpty())
+			DelegateNode->SetFunction(FName(*BoundFunction));
+		return DelegateNode;
+	}
+
+	// AddDelegate / RemoveDelegate: 멀티캐스트 델리게이트 프로퍼티에 바인딩/해제.
+	if (DelegateProperty.IsEmpty())
+	{
+		OutError = FString::Printf(TEXT("%s requires 'delegate_property'"), *NodeType);
+		return nullptr;
+	}
+
+	// 소유 클래스: delegate_owner 지정 시 해석, 아니면 BP 자기 자신.
+	UClass* OwnerClass = nullptr;
+	if (DelegateOwner.IsEmpty())
+		OwnerClass = Blueprint ? Blueprint->GeneratedClass.Get() : nullptr;
+	else
+		OwnerClass = ResolveClass(DelegateOwner);
+	if (!OwnerClass)
+	{
+		OutError = TEXT("Could not resolve delegate owner class (compile the Blueprint or pass delegate_owner)");
+		return nullptr;
+	}
+
+	FMulticastDelegateProperty* DelegateProp = FindMulticastDelegateProperty(OwnerClass, DelegateProperty);
+	if (!DelegateProp)
+	{
+		OutError = FString::Printf(TEXT("Multicast delegate '%s' not found on '%s'"), *DelegateProperty, *OwnerClass->GetName());
+		return nullptr;
+	}
+
+	const bool bSelfContext = DelegateOwner.IsEmpty();
+
+	if (NodeType.Equals(TEXT("AddDelegate"), ESearchCase::IgnoreCase))
+	{
+		FGraphNodeCreator<UK2Node_AddDelegate> NodeCreator(*Graph);
+		UK2Node_AddDelegate* AddNode = NodeCreator.CreateNode();
+		AddNode->SetFromProperty(DelegateProp, bSelfContext, OwnerClass);
+		AddNode->NodePosX = PosX;
+		AddNode->NodePosY = PosY;
+		NodeCreator.Finalize();
+		return AddNode;
+	}
+
+	FGraphNodeCreator<UK2Node_RemoveDelegate> NodeCreator(*Graph);
+	UK2Node_RemoveDelegate* RemoveNode = NodeCreator.CreateNode();
+	RemoveNode->SetFromProperty(DelegateProp, bSelfContext, OwnerClass);
+	RemoveNode->NodePosX = PosX;
+	RemoveNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+	return RemoveNode;
+}
+
+//-----------------------------------------------------------------------------
+// 함수 시그니처 편집
+//-----------------------------------------------------------------------------
+
+bool FBlueprintGraphEditor::MakePinType(const FString& TypeStr, FEdGraphPinType& OutPinType, FString& OutError)
+{
+	OutPinType = FEdGraphPinType();
+	OutPinType.ContainerType = EPinContainerType::None;
+
+	const FString T = TypeStr.TrimStartAndEnd();
+	if (T.IsEmpty()) { OutError = TEXT("Empty param_type"); return false; }
+
+	if (T.Equals(TEXT("bool"), ESearchCase::IgnoreCase) || T.Equals(TEXT("boolean"), ESearchCase::IgnoreCase))
+	{
+		OutPinType.PinCategory = UEdGraphSchema_K2::PC_Boolean;
+	}
+	else if (T.Equals(TEXT("int"), ESearchCase::IgnoreCase) || T.Equals(TEXT("int32"), ESearchCase::IgnoreCase) || T.Equals(TEXT("integer"), ESearchCase::IgnoreCase))
+	{
+		OutPinType.PinCategory = UEdGraphSchema_K2::PC_Int;
+	}
+	else if (T.Equals(TEXT("int64"), ESearchCase::IgnoreCase))
+	{
+		OutPinType.PinCategory = UEdGraphSchema_K2::PC_Int64;
+	}
+	else if (T.Equals(TEXT("float"), ESearchCase::IgnoreCase))
+	{
+		OutPinType.PinCategory = UEdGraphSchema_K2::PC_Real;
+		OutPinType.PinSubCategory = UEdGraphSchema_K2::PC_Float;
+	}
+	else if (T.Equals(TEXT("double"), ESearchCase::IgnoreCase))
+	{
+		OutPinType.PinCategory = UEdGraphSchema_K2::PC_Real;
+		OutPinType.PinSubCategory = UEdGraphSchema_K2::PC_Double;
+	}
+	else if (T.Equals(TEXT("string"), ESearchCase::IgnoreCase) || T.Equals(TEXT("fstring"), ESearchCase::IgnoreCase))
+	{
+		OutPinType.PinCategory = UEdGraphSchema_K2::PC_String;
+	}
+	else if (T.Equals(TEXT("name"), ESearchCase::IgnoreCase) || T.Equals(TEXT("fname"), ESearchCase::IgnoreCase))
+	{
+		OutPinType.PinCategory = UEdGraphSchema_K2::PC_Name;
+	}
+	else if (T.Equals(TEXT("text"), ESearchCase::IgnoreCase) || T.Equals(TEXT("ftext"), ESearchCase::IgnoreCase))
+	{
+		OutPinType.PinCategory = UEdGraphSchema_K2::PC_Text;
+	}
+	else
+	{
+		// 클래스(object) 또는 스트럭트로 해석 시도.
+		if (UClass* AsClass = ResolveClass(T))
+		{
+			OutPinType.PinCategory = UEdGraphSchema_K2::PC_Object;
+			OutPinType.PinSubCategoryObject = AsClass;
+		}
+		else if (UScriptStruct* AsStruct = FindFirstObject<UScriptStruct>(*T, EFindFirstObjectOptions::None))
+		{
+			OutPinType.PinCategory = UEdGraphSchema_K2::PC_Struct;
+			OutPinType.PinSubCategoryObject = AsStruct;
+		}
+		else
+		{
+			OutError = FString::Printf(TEXT("Unknown param_type '%s'. Use bool|int|int64|float|double|string|name|text|<ClassName>|<StructName>"), *TypeStr);
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FBlueprintGraphEditor::AddFunctionParam(UEdGraph* FuncGraph, const FString& ParamName, const FString& ParamType,
+	bool bIsOutput, FString& OutError)
+{
+	if (!FuncGraph) { OutError = TEXT("Null graph"); return false; }
+	if (ParamName.IsEmpty()) { OutError = TEXT("param_name is required"); return false; }
+
+	FEdGraphPinType PinType;
+	if (!MakePinType(ParamType, PinType, OutError))
+		return false;
+
+	UK2Node_EditablePinBase* TargetNode = nullptr;
+
+	if (!bIsOutput)
+	{
+		// 입력 파라미터 → FunctionEntry의 출력 핀.
+		for (UEdGraphNode* Node : FuncGraph->Nodes)
+		{
+			if (UK2Node_FunctionEntry* Entry = Cast<UK2Node_FunctionEntry>(Node)) { TargetNode = Entry; break; }
+		}
+		if (!TargetNode)
+		{
+			OutError = TEXT("No FunctionEntry node found. add_function_param requires a function graph (is_function_graph=true).");
+			return false;
+		}
+	}
+	else
+	{
+		// 출력(반환) → FunctionResult의 입력 핀. 없으면 생성.
+		for (UEdGraphNode* Node : FuncGraph->Nodes)
+		{
+			if (UK2Node_FunctionResult* Result = Cast<UK2Node_FunctionResult>(Node)) { TargetNode = Result; break; }
+		}
+		if (!TargetNode)
+		{
+			UEdGraphNode* Created = CreateFunctionResultNode(FuncGraph, 600, 0, OutError);
+			if (!Created) return false;
+			TargetNode = Cast<UK2Node_EditablePinBase>(Created);
+		}
+	}
+
+	if (!TargetNode)
+	{
+		OutError = TEXT("Could not resolve target node for parameter");
+		return false;
+	}
+
+	const EEdGraphPinDirection Direction = bIsOutput ? EGPD_Input : EGPD_Output;
+	UEdGraphPin* NewPin = TargetNode->CreateUserDefinedPin(FName(*ParamName), PinType, Direction, /*bUseUniqueName*/true);
+	if (!NewPin)
+	{
+		OutError = FString::Printf(TEXT("Failed to create user-defined pin '%s'"), *ParamName);
+		return false;
+	}
+
+	if (UBlueprint* Blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(FuncGraph))
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+	return true;
 }
 
 //-----------------------------------------------------------------------------

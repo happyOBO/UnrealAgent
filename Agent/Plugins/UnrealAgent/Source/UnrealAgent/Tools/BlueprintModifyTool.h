@@ -17,9 +17,9 @@ struct FBlueprintModifyTool : public FMcpTool
 {
 	GENERATED_BODY()
 
-	/** 수행할 연산: add_node | add_component | connect_pins | disconnect_pins | set_pin_value | delete_node | list_nodes */
+	/** 수행할 연산 */
 	UPROPERTY(meta=(ToolParam="operation", Required,
-		Description="One of: add_node, add_component, connect_pins, disconnect_pins, set_pin_value, delete_node, list_nodes"))
+		Description="One of: add_node, add_component, add_function_param, connect_pins, disconnect_pins, set_pin_value, delete_node, list_nodes"))
 	FString Operation;
 
 	/** 대상 블루프린트 경로 (예: /Game/BP_Door) */
@@ -40,7 +40,7 @@ struct FBlueprintModifyTool : public FMcpTool
 	// ── add_node ──
 
 	UPROPERTY(meta=(ToolParam="node_type",
-		Description="[add_node] CallFunction | Event | VariableGet | VariableSet | Branch | Sequence"))
+		Description="[add_node] CallFunction | Event | VariableGet | VariableSet | Branch | Sequence | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate"))
 	FString NodeType;
 
 	UPROPERTY(meta=(ToolParam="function",
@@ -48,11 +48,11 @@ struct FBlueprintModifyTool : public FMcpTool
 	FString Function;
 
 	UPROPERTY(meta=(ToolParam="target_class",
-		Description="[add_node CallFunction] Owning class: KismetSystemLibrary | KismetMathLibrary | GameplayStatics | <ClassName>"))
+		Description="[add_node CallFunction] Owning class: KismetSystemLibrary | KismetMathLibrary | GameplayStatics | <ClassName>. [add_node Cast] Class to cast to, e.g. PlayerController"))
 	FString TargetClass;
 
 	UPROPERTY(meta=(ToolParam="event",
-		Description="[add_node Event] Event name: BeginPlay | Tick | EndPlay | <ParentFunction>"))
+		Description="[add_node Event] Event name: BeginPlay | Tick | EndPlay | <ParentFunction>. [add_node CustomEvent] The custom event name to create"))
 	FString Event;
 
 	UPROPERTY(meta=(ToolParam="variable",
@@ -62,6 +62,22 @@ struct FBlueprintModifyTool : public FMcpTool
 	UPROPERTY(meta=(ToolParam="num_outputs",
 		Description="[add_node Sequence] Number of output exec pins"))
 	int32 NumOutputs = 0;
+
+	UPROPERTY(meta=(ToolParam="component",
+		Description="[add_node ComponentBoundEvent] Component/widget property name whose delegate to bind, e.g. BtnOk"))
+	FString Component;
+
+	UPROPERTY(meta=(ToolParam="delegate_property",
+		Description="[add_node ComponentBoundEvent/AddDelegate/RemoveDelegate] Multicast delegate property name, e.g. OnClicked"))
+	FString DelegateProperty;
+
+	UPROPERTY(meta=(ToolParam="delegate_owner",
+		Description="[add_node AddDelegate/RemoveDelegate] Owning class of the delegate. Empty = this Blueprint (self)."))
+	FString DelegateOwner;
+
+	UPROPERTY(meta=(ToolParam="bound_function",
+		Description="[add_node CreateDelegate] Name of the function/event to bind the delegate to"))
+	FString BoundFunction;
 
 	UPROPERTY(meta=(ToolParam="pos_x", Description="[add_node] Node X position"))
 	int32 PosX = 0;
@@ -114,6 +130,20 @@ struct FBlueprintModifyTool : public FMcpTool
 	UPROPERTY(meta=(ToolParam="value",
 		Description="[set_pin_value] New default value (string; parsed by pin type)"))
 	FString Value;
+
+	// ── add_function_param (함수 그래프 전용) ──
+
+	UPROPERTY(meta=(ToolParam="param_name",
+		Description="[add_function_param] Name of the function parameter to add"))
+	FString ParamName;
+
+	UPROPERTY(meta=(ToolParam="param_type",
+		Description="[add_function_param] Type: bool | int | int64 | float | double | string | name | text | <ClassName> | <StructName>"))
+	FString ParamType;
+
+	UPROPERTY(meta=(ToolParam="direction",
+		Description="[add_function_param] 'input' (FunctionEntry) or 'output' (FunctionResult). Default input."))
+	FString Direction;
 
 	virtual FString ToolDescription() const override;
 	virtual FMcpResponse Execute() override;

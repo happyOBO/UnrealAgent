@@ -41,7 +41,9 @@ public class UnrealAgent : ModuleRules
 			"BlueprintGraph",
 			"AnimGraph",
 			"AnimGraphRuntime",
-			"SubobjectDataInterface"
+			"SubobjectDataInterface",
+			"UMG",
+			"UMGEditor"
 		]);
 	}
 }
