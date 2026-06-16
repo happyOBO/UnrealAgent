@@ -34,7 +34,13 @@ public abstract record ChatEvent
     
     /// <summary>커맨드 메시지입니다.</summary>
     public sealed record Command(string Name, string Argument) : ChatEvent;
-    
+
+    /// <summary>
+    /// 턴 종료 시점의 토큰/비용 사용량입니다.
+    /// <paramref name="ContextTokens"/>는 입력측 컨텍스트 총량(input + cache_read + cache_creation)입니다.
+    /// </summary>
+    public sealed record Usage(long ContextTokens, long OutputTokens, double CostUsd) : ChatEvent;
+
     /// <summary>스트림 종료입니다.</summary>
     public sealed record Done : ChatEvent;
 }

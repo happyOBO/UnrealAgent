@@ -21,7 +21,7 @@
                 <PermissionDialog Request="PermReq" OnDecision="HandlePermissionDecision" />
             }
 
-            <ChatInput OnSend="AgentRunner.EnqueueMessage" ContextTokens="AgentSession.Conversation.ContextTokens"/>
+            <ChatInput OnSend="AgentRunner.EnqueueMessage" OnStop="AgentRunner.CancelCurrentTurn" bIsBusy="AgentRunner.bIsBusy" ContextTokens="AgentRunner.ContextTokens"/>
         </div>
     }
 }
@@ -30,6 +30,6 @@ else
     @* 팀원 모드 — 채팅 + 입력만 *@
     <ChatMessages Messages="AgentRunner.Store.Messages" bIsReceiving="AgentRunner.Store.bIsReceiving" />
     <div class="relative shrink-0">
-        <ChatInput OnSend="AgentRunner.EnqueueMessage" ContextTokens="AgentSession.Conversation.ContextTokens"/>
+        <ChatInput OnSend="AgentRunner.EnqueueMessage" OnStop="AgentRunner.CancelCurrentTurn" bIsBusy="AgentRunner.bIsBusy" ContextTokens="AgentRunner.ContextTokens"/>
     </div>
 }

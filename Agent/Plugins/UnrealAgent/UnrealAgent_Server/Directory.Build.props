@@ -1,7 +1,12 @@
 <Project>
   <PropertyGroup>
+    <!--
+      OutputPath를 직접 지정하지 않습니다. Directory.Build.props는 SDK가 Configuration 기본값(Debug)을
+      적용하기 전에 import되므로, 여기서 $(Configuration)로 OutputPath를 만들면 빈 값일 때 'Build\' 직하로
+      산출물이 떨어집니다. BaseOutputPath만 주고 OutputPath = $(BaseOutputPath)$(Configuration)\ 계산은
+      SDK에 맡겨 Build\Debug\ / Build\Release\로만 떨어지게 합니다.
+    -->
     <BaseOutputPath>$(MSBuildThisFileDirectory)Build\</BaseOutputPath>
-    <OutputPath>$(BaseOutputPath)$(Configuration)\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>

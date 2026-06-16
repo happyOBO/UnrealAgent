@@ -25,7 +25,25 @@ public sealed class AgentRunner(AgentSession Session, IHostApplicationLifetime L
     
     /// <summary>ChatEvent 발생 시 UI 스레드에서 처리할 콜백입니다. 최신 구독자만 유지합니다.</summary>
     public Func<ChatEvent, Task>? OnChatEvent { get; set; }
-    
+
+    /// <summary>busy 상태가 바뀔 때 UI 스레드에서 재렌더하기 위한 콜백입니다.</summary>
+    public Func<Task>? OnBusyChanged { get; set; }
+
+    /// <summary>턴이 진행 중인지 여부입니다. true이면 새 메시지 전송을 막고 Stop 버튼을 노출합니다.</summary>
+    public bool bIsBusy { get; private set; }
+
+    /// <summary>
+    /// 마지막 턴 기준 입력측 컨텍스트 토큰 사용량입니다. TokenMeter가 이 값을 표시합니다.
+    /// CLI(Claude Code) 경로는 Conversation 히스토리를 채우지 않으므로 여기서 직접 추적합니다.
+    /// </summary>
+    public long ContextTokens { get; private set; }
+
+    /// <summary>현재 진행 중인 턴의 취소 토큰 소스입니다. Stop/Esc 시 Cancel합니다.</summary>
+    private CancellationTokenSource? TurnCts;
+
+    /// <summary>현재 진행 중인 턴을 취소합니다. UI의 Stop 버튼/Esc 키에서 호출됩니다.</summary>
+    public void CancelCurrentTurn() => TurnCts?.Cancel();
+
     protected override async Task ExecuteAsync(CancellationToken Ct)
     {
         while (!Ct.IsCancellationRequested)
@@ -40,11 +58,11 @@ public sealed class AgentRunner(AgentSession Session, IHostApplicationLifetime L
             await DrainMailbox();
             
             // 큐에 아무것도 없으면 다시 대기
-            if (MessageQueue.Count == 0) 
+            if (MessageQueue.Count == 0)
                 continue;
-            
+
             // 메시지 큐를 순차 처리합니다.
-            await DrainQueue();
+            await DrainQueue(Ct);
         }
     }
     
@@ -53,31 +71,107 @@ public sealed class AgentRunner(AgentSession Session, IHostApplicationLifetime L
     /// </summary>
     public async Task EnqueueMessage(UserInput Input)
     {
+        // 이미 턴이 진행 중이면 무시합니다(UI 가드의 방어선). 진행 중에는 새 입력을 받지 않습니다.
+        if (bIsBusy)
+            return;
+
+        // 전송 즉시 busy로 전환하여 추가 전송을 막고 Stop 버튼을 노출합니다.
+        await SetBusyAsync(true);
+
         // 사용자 메세지 UI를 위해 추가
         await DispatchEventAsync(new ChatEvent.User(Input.Text, Input.ImageMediaType, Input.ImageBase64));
-        
+
         MessageQueue.Enqueue(Input);
         Signal.Release();
     }
-    
+
+    /// <summary>
+    /// 토큰 사용량/초기화 이벤트를 보고 컨텍스트 토큰 표시값을 갱신합니다.
+    /// 갱신 후 이어지는 DispatchEventAsync의 StateHasChanged가 미터를 다시 그립니다.
+    /// </summary>
+    private void UpdateContextTokens(ChatEvent Evt)
+    {
+        switch (Evt)
+        {
+            case ChatEvent.Usage Usage:
+                ContextTokens = Usage.ContextTokens;
+                break;
+
+            // /clear는 세션을 끊으므로 컨텍스트도 0으로 되돌립니다.
+            case ChatEvent.Command { Name: var Name } when Name.Equals("clear", StringComparison.OrdinalIgnoreCase):
+                ContextTokens = 0;
+                break;
+        }
+    }
+
+    /// <summary>busy 상태를 변경하고 UI에 통지합니다.</summary>
+    private async Task SetBusyAsync(bool Value)
+    {
+        if (bIsBusy == Value)
+            return;
+
+        bIsBusy = Value;
+
+        if (OnBusyChanged is { } Handler)
+            await Handler();
+    }
+
     /// <summary>
     /// 큐에서 메시지를 하나씩 꺼내 순차적으로 처리합니다.
     /// </summary>
-    private async Task DrainQueue()
+    private async Task DrainQueue(CancellationToken StoppingToken)
     {
-        while (MessageQueue.TryDequeue(out UserInput? Input))
+        // 메일박스 등 EnqueueMessage를 거치지 않은 경로도 busy로 표시합니다.
+        await SetBusyAsync(true);
+
+        try
         {
-            try
+            while (MessageQueue.TryDequeue(out UserInput? Input))
             {
-                await foreach (ChatEvent Evt in Session.ProcessMessage(Input))
+                // 턴 단위 취소 토큰: 종료 토큰과 연동하여 앱 종료 시에도 취소됩니다.
+                using CancellationTokenSource Cts = CancellationTokenSource.CreateLinkedTokenSource(StoppingToken);
+                TurnCts = Cts;
+
+                bool bCancelled = false;
+
+                try
                 {
-                    await DispatchEventAsync(Evt);
+                    await foreach (ChatEvent Evt in Session.ProcessMessage(Input, Cts.Token))
+                    {
+                        UpdateContextTokens(Evt);
+                        await DispatchEventAsync(Evt);
+                    }
+
+                    // CLI가 ReadLine 취소 시 깔끔히 끝나는 경로(예외 없음)도 중단으로 간주합니다.
+                    bCancelled = Cts.IsCancellationRequested;
+                }
+                catch (OperationCanceledException) when (Cts.IsCancellationRequested && !StoppingToken.IsCancellationRequested)
+                {
+                    // 권한 대기/stdin 쓰기 도중 취소된 경로: 턴 종료 이벤트로 UI 상태를 마무리합니다.
+                    bCancelled = true;
+                    await DispatchEventAsync(new ChatEvent.Done());
+                }
+                catch (Exception e)
+                {
+                    await DispatchEventAsync(new ChatEvent.System(e.Message));
+                }
+                finally
+                {
+                    TurnCts = null;
+                }
+
+                if (bCancelled)
+                {
+                    await DispatchEventAsync(new ChatEvent.System("응답이 중단되었습니다."));
+
+                    // 사용자가 중단했으므로 대기 중인 후속 메시지도 비웁니다.
+                    MessageQueue.Clear();
                 }
             }
-            catch (Exception e)
-            {
-                await DispatchEventAsync(new ChatEvent.System(e.Message));
-            }
+        }
+        finally
+        {
+            await SetBusyAsync(false);
         }
     }
     

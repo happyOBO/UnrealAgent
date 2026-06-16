@@ -115,7 +115,8 @@ public sealed class AgentLoop(
                     break;
                 }
 
-                case ClaudeStreamItem.Result:
+                case ClaudeStreamItem.Result Done:
+                    yield return new ChatEvent.Usage(Done.ContextTokens, Done.OutputTokens, Done.CostUsd);
                     yield return new ChatEvent.Done();
                     yield break;
 

@@ -331,14 +331,17 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
         double Cost = Root.TryGetProperty("total_cost_usd", out JsonElement CostEl) && CostEl.ValueKind == JsonValueKind.Number
             ? CostEl.GetDouble() : 0;
 
-        long InTok = 0, OutTok = 0;
+        long InTok = 0, OutTok = 0, CacheRead = 0, CacheCreate = 0;
         if (Root.TryGetProperty("usage", out JsonElement Usage) && Usage.ValueKind == JsonValueKind.Object)
         {
             InTok = GetLong(Usage, "input_tokens");
             OutTok = GetLong(Usage, "output_tokens");
+            // 프롬프트 캐싱 사용 시 input_tokens에서 빠지는 부분 — 컨텍스트 총량 산출에 합산합니다.
+            CacheRead = GetLong(Usage, "cache_read_input_tokens");
+            CacheCreate = GetLong(Usage, "cache_creation_input_tokens");
         }
 
-        return new ClaudeStreamItem.Result(IsError, Text, InTok, OutTok, Cost);
+        return new ClaudeStreamItem.Result(IsError, Text, InTok, OutTok, CacheRead, CacheCreate, Cost);
     }
 
     /// <summary>tool_result의 content(문자열 또는 블록 배열)에서 텍스트를 추출합니다.</summary>

@@ -34,6 +34,7 @@ public partial class Chat : IAsyncDisposable
     protected override void OnInitialized()
     {
         AgentRunner.OnChatEvent = OnChatEvent;
+        AgentRunner.OnBusyChanged = OnBusyChanged;
     }
 
     public ValueTask DisposeAsync()
@@ -41,8 +42,14 @@ public partial class Chat : IAsyncDisposable
         if (AgentRunner.OnChatEvent == OnChatEvent)
             AgentRunner.OnChatEvent = null;
 
+        if (AgentRunner.OnBusyChanged == OnBusyChanged)
+            AgentRunner.OnBusyChanged = null;
+
         return ValueTask.CompletedTask;
     }
+
+    /// <summary>busy 상태 변화 시 UI 스레드에서 재렌더하여 입력 가드/Stop 버튼을 갱신합니다.</summary>
+    private Task OnBusyChanged() => InvokeAsync(StateHasChanged);
 
     /// <summary>
     /// AgentRunner의 ChatEvent를 UI 스레드에서 처리합니다.

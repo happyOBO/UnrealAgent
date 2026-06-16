@@ -51,11 +51,23 @@
                         <!-- Thinking/Effort 컨트롤 (모델 지원 여부에 따라 표시) -->
                         <ThinkingControls />
 
-                        <!-- 전송 버튼: 클릭 또는 Enter로 메시지를 보냅니다. -->
-                        <button type="submit"
-                                class="flex items-center justify-center size-7 rounded-sm transition-all active:scale-95 bg-[#0070e0] hover:bg-[#0060c0] text-white shadow-[0_0_10px_rgba(0,112,224,0.3)] active:shadow-inner">
-                            <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
-                        </button>
+                        @if (bIsBusy)
+                        {
+                            <!-- 중단 버튼: 진행 중인 응답을 취소합니다(Esc도 동일). -->
+                            <button type="button" @onclick="HandleStop"
+                                    title="응답 중단 (Esc)"
+                                    class="flex items-center justify-center size-7 rounded-sm transition-all active:scale-95 bg-[#3a3a3a] hover:bg-[#4a4a4a] text-white active:shadow-inner">
+                                <span class="material-symbols-outlined text-[18px]">stop</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <!-- 전송 버튼: 클릭 또는 Enter로 메시지를 보냅니다. -->
+                            <button type="submit"
+                                    class="flex items-center justify-center size-7 rounded-sm transition-all active:scale-95 bg-[#0070e0] hover:bg-[#0060c0] text-white shadow-[0_0_10px_rgba(0,112,224,0.3)] active:shadow-inner">
+                                <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
+                            </button>
+                        }
                     </div>
                 </div>
             </div>

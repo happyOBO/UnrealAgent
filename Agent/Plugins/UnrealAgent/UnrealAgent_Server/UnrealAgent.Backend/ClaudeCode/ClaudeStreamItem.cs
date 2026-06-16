@@ -34,8 +34,15 @@ public abstract record ClaudeStreamItem
     }
 
     /// <summary>턴 종료(result 이벤트)입니다. 토큰/비용 사용량을 담습니다.</summary>
-    public sealed record Result(bool IsError, string? Text, long InputTokens, long OutputTokens, double CostUsd)
-        : ClaudeStreamItem;
+    public sealed record Result(
+        bool IsError, string? Text,
+        long InputTokens, long OutputTokens,
+        long CacheReadTokens, long CacheCreationTokens,
+        double CostUsd) : ClaudeStreamItem
+    {
+        /// <summary>입력측 컨텍스트 총량입니다 (input + cache_read + cache_creation).</summary>
+        public long ContextTokens => InputTokens + CacheReadTokens + CacheCreationTokens;
+    }
 
     /// <summary>실행/파싱 실패입니다 (CLI 미발견, 프로세스 오류 등).</summary>
     public sealed record Failure(string Message) : ClaudeStreamItem;

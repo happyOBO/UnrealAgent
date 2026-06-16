@@ -76,5 +76,11 @@ export function setupKeyBindings(textarea, dotNetRef)
             e.preventDefault();
             dotNetRef.invokeMethodAsync("CycleMode");
         }
+        else if (e.key === "Escape")
+        {
+            // 팝업이 닫힌 상태의 Esc는 진행 중인 응답을 중단합니다(턴이 없으면 C#에서 무시).
+            e.preventDefault();
+            dotNetRef.invokeMethodAsync("RequestStop");
+        }
     });
 }

@@ -10,6 +10,12 @@ public partial class ChatInput : JsComponentBase
     /// <summary>메시지 전송 콜백입니다.</summary>
     [Parameter] public EventCallback<UserInput> OnSend { get; set; }
 
+    /// <summary>진행 중인 턴을 중단하는 콜백입니다. Stop 버튼/Esc 키에서 호출합니다.</summary>
+    [Parameter] public EventCallback OnStop { get; set; }
+
+    /// <summary>턴 진행 중 여부입니다. true이면 전송을 막고 Stop 버튼을 표시합니다.</summary>
+    [Parameter] public bool bIsBusy { get; set; }
+
     /// <summary>현재 컨텍스트 토큰 수입니다. TokenMeter에 전달합니다.</summary>
     [Parameter] public long ContextTokens { get; set; }
 
@@ -137,9 +143,24 @@ public partial class ChatInput : JsComponentBase
     [JSInvokable]
     public void MentionClose() => MenPopup.Close();
 
+    /// <summary>Esc 시 JS에서 호출됩니다. 턴 진행 중일 때만 중단합니다.</summary>
+    [JSInvokable]
+    public async Task RequestStop()
+    {
+        if (bIsBusy)
+            await OnStop.InvokeAsync();
+    }
+
+    /// <summary>Stop 버튼 클릭 시 진행 중인 턴을 중단합니다.</summary>
+    private async Task HandleStop() => await OnStop.InvokeAsync();
+
     /// <summary>폼 제출 시 메시지를 전송합니다.</summary>
     private async Task HandleSubmit()
     {
+        // 응답 중에는 전송을 막습니다(busy 가드).
+        if (bIsBusy)
+            return;
+
         string Trimmed = InputText.Trim();
         bool bHasImage = ImagePickerRef?.ImageBase64 is not null;
 
