@@ -1,10 +1,21 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace UnrealAgent.Backend.Chat;
 
 /// <summary>
 /// UI에 표시되는 채팅 메시지입니다.
 /// </summary>
+/// <remarks>
+/// SessionStore의 디스크 영속화(저장/복원)를 위해 폴리모픽 직렬화를 지원합니다.
+/// "$type" 판별자로 파생 레코드를 구분합니다.
+/// </remarks>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+[JsonDerivedType(typeof(User), "user")]
+[JsonDerivedType(typeof(Assistant), "assistant")]
+[JsonDerivedType(typeof(Thinking), "thinking")]
+[JsonDerivedType(typeof(Tool), "tool")]
+[JsonDerivedType(typeof(System), "system")]
 public abstract record ChatUIMessage
 {
     /// <summary>메시지 본문입니다.</summary>

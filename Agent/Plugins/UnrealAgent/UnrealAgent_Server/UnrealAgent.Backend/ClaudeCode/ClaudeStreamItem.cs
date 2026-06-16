@@ -15,6 +15,12 @@ public abstract record ClaudeStreamItem
     /// <summary>확장 사고 블록입니다.</summary>
     public sealed record Thinking(string Text) : ClaudeStreamItem;
 
+    /// <summary>
+    /// 어시스턴트 메시지 1건의 입력측 컨텍스트 사용량입니다 (input + cache_read + cache_creation).
+    /// 해당 요청 시점의 실제 컨텍스트 크기를 나타내며, 턴 내 마지막 값이 현재 컨텍스트 총량입니다.
+    /// </summary>
+    public sealed record ContextUsage(long ContextTokens) : ClaudeStreamItem;
+
     /// <summary>도구 호출 블록입니다.</summary>
     public sealed record ToolUse(string Id, string Name, string InputJson) : ClaudeStreamItem;
 
@@ -33,16 +39,16 @@ public abstract record ClaudeStreamItem
             new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    /// <summary>턴 종료(result 이벤트)입니다. 토큰/비용 사용량을 담습니다.</summary>
+    /// <summary>
+    /// 턴 종료(result 이벤트)입니다. 비용/출력 사용량을 담습니다.
+    /// 주의: result의 토큰 usage는 턴 내 모든 모델 호출의 <b>누적</b>값이므로
+    /// 현재 컨텍스트 크기로 사용하면 안 됩니다 (그 용도로는 <see cref="ContextUsage"/>를 사용).
+    /// </summary>
     public sealed record Result(
         bool IsError, string? Text,
         long InputTokens, long OutputTokens,
         long CacheReadTokens, long CacheCreationTokens,
-        double CostUsd) : ClaudeStreamItem
-    {
-        /// <summary>입력측 컨텍스트 총량입니다 (input + cache_read + cache_creation).</summary>
-        public long ContextTokens => InputTokens + CacheReadTokens + CacheCreationTokens;
-    }
+        double CostUsd) : ClaudeStreamItem;
 
     /// <summary>실행/파싱 실패입니다 (CLI 미발견, 프로세스 오류 등).</summary>
     public sealed record Failure(string Message) : ClaudeStreamItem;

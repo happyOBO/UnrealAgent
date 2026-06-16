@@ -65,6 +65,9 @@ public sealed class AgentLoop(
         // tool_use_id → 도구 이름 (tool_result에 이름을 채우기 위함)
         Dictionary<string, string> ToolNames = new();
 
+        // 턴 내 마지막 어시스턴트 메시지의 컨텍스트 총량 (현재 컨텍스트 크기).
+        long LastContextTokens = 0;
+
         await using ClaudeCodeRunner Runner = new(CliPath);
 
         await foreach (ClaudeStreamItem Item in Runner.RunAsync(Options, Input, Ct))
@@ -81,6 +84,10 @@ public sealed class AgentLoop(
 
                 case ClaudeStreamItem.Thinking Thinking:
                     yield return new ChatEvent.Thinking(Thinking.Text);
+                    break;
+
+                case ClaudeStreamItem.ContextUsage Context:
+                    LastContextTokens = Context.ContextTokens;
                     break;
 
                 case ClaudeStreamItem.ToolUse Tool:
@@ -116,7 +123,8 @@ public sealed class AgentLoop(
                 }
 
                 case ClaudeStreamItem.Result Done:
-                    yield return new ChatEvent.Usage(Done.ContextTokens, Done.OutputTokens, Done.CostUsd);
+                    // 컨텍스트 총량은 result의 누적 usage가 아니라 마지막 어시스턴트 메시지의 값을 사용합니다.
+                    yield return new ChatEvent.Usage(LastContextTokens, Done.OutputTokens, Done.CostUsd);
                     yield return new ChatEvent.Done();
                     yield break;
 

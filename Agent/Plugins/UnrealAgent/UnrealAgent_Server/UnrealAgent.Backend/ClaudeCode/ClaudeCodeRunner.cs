@@ -246,6 +246,17 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
         if (!Root.TryGetProperty("message", out JsonElement Msg))
             return;
 
+        // 이 요청 시점의 실제 컨텍스트 크기입니다. result의 누적 usage와 달리
+        // 단일 모델 호출의 입력측 총량이므로 컨텍스트 미터의 올바른 출처입니다.
+        if (Msg.TryGetProperty("usage", out JsonElement Usg) && Usg.ValueKind == JsonValueKind.Object)
+        {
+            long Context = GetLong(Usg, "input_tokens")
+                           + GetLong(Usg, "cache_read_input_tokens")
+                           + GetLong(Usg, "cache_creation_input_tokens");
+            if (Context > 0)
+                Items.Add(new ClaudeStreamItem.ContextUsage(Context));
+        }
+
         // 스트리밍 분류기 개입(거부) 처리
         if (Msg.TryGetProperty("stop_reason", out JsonElement StopEl)
             && StopEl.ValueKind == JsonValueKind.String && StopEl.GetString() == "refusal")

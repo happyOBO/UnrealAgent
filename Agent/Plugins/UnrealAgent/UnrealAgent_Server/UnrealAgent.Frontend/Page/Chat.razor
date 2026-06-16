@@ -3,7 +3,7 @@
 @if (AgentSession.Team.ParentPid is null)
 {
     @* 리더 모드 — 전체 UI *@
-    <Header OnSettingsClick="ToggleSettings"/>
+    <Header OnSettingsClick="ToggleSettings" OnNewSession="NewSession" OnRestoreContext="RestoreContext" bCanRestore="CanRestore"/>
     <SettingsPanel bIsVisible="bShowSettings" OnClose="ToggleSettings" />
     <AgentTabBar Team="AgentSession.Team" OnTabSelected="port => SelectedTeammatePort = port"/>
 

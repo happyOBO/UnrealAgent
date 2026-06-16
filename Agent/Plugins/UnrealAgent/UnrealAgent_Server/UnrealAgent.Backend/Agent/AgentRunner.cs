@@ -12,7 +12,7 @@ namespace UnrealAgent.Backend.Agent;
 /// 리더와 팀원 모두 동일한 서비스를 사용합니다.
 /// Store 수정은 직접 하지 않고 OnChatEvent를 통해 UI 스레드에서 실행합니다.
 /// </summary>
-public sealed class AgentRunner(AgentSession Session, IHostApplicationLifetime Lifetime) : BackgroundService
+public sealed class AgentRunner(AgentSession Session, SessionStore SessionStore, IHostApplicationLifetime Lifetime) : BackgroundService
 {
     /// <summary>반응형 상태 관리자입니다.</summary>
     public ChatStore Store { get; } = new();
@@ -167,12 +167,33 @@ public sealed class AgentRunner(AgentSession Session, IHostApplicationLifetime L
                     // 사용자가 중단했으므로 대기 중인 후속 메시지도 비웁니다.
                     MessageQueue.Clear();
                 }
+
+                // 턴 종료 시점에 세션을 디스크에 저장하여 다음 실행에서 복원할 수 있게 합니다.
+                PersistSession();
             }
         }
         finally
         {
             await SetBusyAsync(false);
         }
+    }
+
+    /// <summary>
+    /// 현재 세션(CLI 세션 ID + UI 메시지)을 디스크에 저장합니다.
+    /// CLI 세션이 없거나(예: /clear 직후) 표시할 메시지가 없으면 저장하지 않습니다.
+    /// </summary>
+    private void PersistSession()
+    {
+        if (Session.ClaudeSessionId is null || Store.Messages.Count == 0)
+            return;
+
+        SessionStore.Save(new PersistedSession
+        {
+            ClaudeSessionId = Session.ClaudeSessionId,
+            Mode = Session.Mode,
+            Messages = Store.Messages.ToList(),
+            SavedAt = DateTime.UtcNow,
+        });
     }
     
     /// <summary>

@@ -51,6 +51,7 @@ Builder.Services.AddSingleton<AuthConfig>();
 // ── Agent 모듈 (에이전트 루프 + 세션) ──
 Builder.Services.AddSingleton<AgentSession>();
 Builder.Services.AddSingleton<AgentLoop>();
+Builder.Services.AddSingleton<SessionStore>();
 
 // ── AgentRunner (메시지 큐 + 에이전트 루프 서비스) ──
 Builder.Services.AddSingleton<AgentRunner>();

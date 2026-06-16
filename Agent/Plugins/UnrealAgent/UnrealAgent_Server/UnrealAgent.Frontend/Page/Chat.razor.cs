@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using UnrealAgent.Backend.Agent;
 using UnrealAgent.Backend.Chat;
+using UnrealAgent.Backend.Conversation;
 using UnrealAgent.Backend.Security;
 
 namespace UnrealAgent.Frontend.Page;
@@ -12,6 +13,31 @@ public partial class Chat : IAsyncDisposable
 
     /// <summary>에이전트 세션입니다.</summary>
     [Inject] private AgentSession AgentSession { get; set; } = null!;
+
+    /// <summary>세션 영속화 저장소입니다.</summary>
+    [Inject] private SessionStore SessionStore { get; set; } = null!;
+
+    /// <summary>저장된 세션이 있고 현재 대화가 비어 있을 때만 복원할 수 있습니다.</summary>
+    private bool CanRestore => SessionStore.HasSaved() && AgentRunner.Store.Messages.Count == 0;
+
+    /// <summary>새 세션을 시작합니다. 기존 /clear 로직(대화·세션·저장 파일 초기화)을 재사용합니다.</summary>
+    private async Task NewSession()
+    {
+        await AgentRunner.EnqueueMessage(new UserInput("/clear"));
+    }
+
+    /// <summary>저장된 세션을 복원합니다. CLI 세션 ID는 --resume으로, UI 메시지는 화면에 재표시합니다.</summary>
+    private void RestoreContext()
+    {
+        if (SessionStore.Load() is not { } Saved)
+            return;
+
+        AgentSession.ClaudeSessionId = Saved.ClaudeSessionId;
+        AgentSession.Mode = Saved.Mode;
+        AgentRunner.Store.Restore(Saved.Messages);
+
+        StateHasChanged();
+    }
 
     /// <summary>설정 패널 표시 여부입니다.</summary>
     private bool bShowSettings;

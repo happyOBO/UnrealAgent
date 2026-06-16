@@ -13,6 +13,16 @@ public sealed class ChatStore
     public bool bIsReceiving { get; private set; }
 
     /// <summary>
+    /// 저장된 세션에서 UI 메시지를 복원합니다. 기존 메시지를 비우고 교체합니다.
+    /// </summary>
+    public void Restore(IEnumerable<ChatUIMessage> Restored)
+    {
+        Messages.Clear();
+        Messages.AddRange(Restored);
+        bIsReceiving = false;
+    }
+
+    /// <summary>
     /// ChatEvent를 처리하여 UI 메시지를 업데이트합니다.
     /// </summary>
     public void Process(ChatEvent Evt)

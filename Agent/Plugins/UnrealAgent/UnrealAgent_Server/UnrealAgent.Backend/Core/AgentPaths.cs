@@ -22,6 +22,9 @@ public static class AgentPaths
     /// <summary>스킬 디렉토리 경로입니다 ({ConfigDir}/skills).</summary>
     public static string SkillsDir => Path.Combine(ConfigDir, "skills");
 
+    /// <summary>저장된 세션 파일 경로입니다 ({ConfigDir}/session.json). Restore Context의 대상입니다.</summary>
+    public static string SessionFilePath => Path.Combine(ConfigDir, "session.json");
+
     /// <summary>
     /// UE 도메인 컨텍스트 문서 디렉토리 경로입니다.
     /// 플러그인과 함께 배포되어 실행 파일 옆 contexts/에 복사됩니다.
