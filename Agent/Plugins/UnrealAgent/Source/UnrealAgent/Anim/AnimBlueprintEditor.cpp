@@ -14,6 +14,8 @@
 #include "AnimGraphNode_TransitionResult.h"
 #include "AnimGraphNode_SequencePlayer.h"
 #include "AnimGraphNode_Root.h"
+#include "AnimGraphNode_Slot.h"
+#include "AnimGraphNode_LayeredBoneBlend.h"
 #include "AnimStateNode.h"
 #include "AnimStateTransitionNode.h"
 #include "AnimStateEntryNode.h"
@@ -347,6 +349,125 @@ bool FAnimBlueprintEditor::SetEntryState(UAnimBlueprint* AnimBP, const FString& 
 
 	EntryOut->BreakAllPinLinks();
 	EntryOut->MakeLinkTo(StateIn);
+
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
+	return true;
+}
+
+//-----------------------------------------------------------------------------
+// 메인 AnimGraph 노드 추가
+//-----------------------------------------------------------------------------
+
+UEdGraphNode* FAnimBlueprintEditor::FindNodeById(UEdGraph* AnimGraph, const FString& NodeId)
+{
+	if (!AnimGraph) return nullptr;
+	for (UEdGraphNode* Node : AnimGraph->Nodes)
+	{
+		if (Node && Node->NodeGuid.ToString() == NodeId)
+			return Node;
+	}
+	return nullptr;
+}
+
+UEdGraphPin* FAnimBlueprintEditor::FindPin(UEdGraphNode* Node, const FString& PinName, int32 Direction)
+{
+	if (!Node) return nullptr;
+	if (!PinName.IsEmpty())
+	{
+		for (UEdGraphPin* Pin : Node->Pins)
+		{
+			if (Pin && Pin->Direction == static_cast<EEdGraphPinDirection>(Direction)
+				&& Pin->PinName.ToString().Equals(PinName, ESearchCase::IgnoreCase))
+				return Pin;
+		}
+		return nullptr;
+	}
+	return FirstPin(Node, Direction);
+}
+
+bool FAnimBlueprintEditor::AddSlotNode(UAnimBlueprint* AnimBP, const FString& SlotName, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError)
+{
+	UEdGraph* AnimGraph = FindAnimGraph(AnimBP, OutError);
+	if (!AnimGraph) return false;
+
+	FGraphNodeCreator<UAnimGraphNode_Slot> NodeCreator(*AnimGraph);
+	UAnimGraphNode_Slot* SlotNode = NodeCreator.CreateNode();
+	SlotNode->NodePosX = PosX;
+	SlotNode->NodePosY = PosY;
+	if (!SlotName.IsEmpty())
+		SlotNode->Node.SlotName = FName(*SlotName);
+	NodeCreator.Finalize();
+
+	OutNodeId = SlotNode->NodeGuid.ToString();
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
+	return true;
+}
+
+bool FAnimBlueprintEditor::AddLayeredBlendPerBone(UAnimBlueprint* AnimBP, const TArray<FString>& BoneNames, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError)
+{
+	UEdGraph* AnimGraph = FindAnimGraph(AnimBP, OutError);
+	if (!AnimGraph) return false;
+
+	FGraphNodeCreator<UAnimGraphNode_LayeredBoneBlend> NodeCreator(*AnimGraph);
+	UAnimGraphNode_LayeredBoneBlend* BlendNode = NodeCreator.CreateNode();
+	BlendNode->NodePosX = PosX;
+	BlendNode->NodePosY = PosY;
+
+	// 지정 본들을 하나의 블렌드 레이어(BlendPose 0)의 BranchFilter로 구성합니다.
+	// 입력 핀(Base Pose, Blend Poses 0)은 Finalize 시 LayerSetup 수에 맞춰 할당되므로 미리 채웁니다.
+	if (BoneNames.Num() > 0)
+	{
+		FInputBlendPose Layer;
+		for (const FString& Bone : BoneNames)
+		{
+			FBranchFilter Filter;
+			Filter.BoneName = FName(*Bone);
+			Filter.BlendDepth = 0;
+			Layer.BranchFilters.Add(Filter);
+		}
+		BlendNode->Node.LayerSetup.Empty();
+		BlendNode->Node.LayerSetup.Add(Layer);
+		BlendNode->Node.BlendWeights.Empty();
+		BlendNode->Node.BlendWeights.Add(1.0f);
+	}
+	NodeCreator.Finalize();
+
+	OutNodeId = BlendNode->NodeGuid.ToString();
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
+	return true;
+}
+
+bool FAnimBlueprintEditor::ConnectAnimNodes(UAnimBlueprint* AnimBP, const FString& FromNodeId, const FString& FromPin, const FString& ToNodeId, const FString& ToPin, FString& OutError)
+{
+	UEdGraph* AnimGraph = FindAnimGraph(AnimBP, OutError);
+	if (!AnimGraph) return false;
+
+	UEdGraphNode* SourceNode = FindNodeById(AnimGraph, FromNodeId);
+	if (!SourceNode) { OutError = FString::Printf(TEXT("Source node '%s' not found in AnimGraph"), *FromNodeId); return false; }
+
+	// 대상이 output/result면 Output Pose(Root) 노드로 해석합니다.
+	UEdGraphNode* TargetNode = nullptr;
+	if (ToNodeId.Equals(TEXT("output"), ESearchCase::IgnoreCase) || ToNodeId.Equals(TEXT("result"), ESearchCase::IgnoreCase))
+	{
+		for (UEdGraphNode* Node : AnimGraph->Nodes)
+		{
+			if (Node->IsA<UAnimGraphNode_Root>()) { TargetNode = Node; break; }
+		}
+		if (!TargetNode) { OutError = TEXT("Output Pose (Root) node not found"); return false; }
+	}
+	else
+	{
+		TargetNode = FindNodeById(AnimGraph, ToNodeId);
+		if (!TargetNode) { OutError = FString::Printf(TEXT("Target node '%s' not found in AnimGraph"), *ToNodeId); return false; }
+	}
+
+	UEdGraphPin* OutPin = FindPin(SourceNode, FromPin, EGPD_Output);
+	UEdGraphPin* InPin = FindPin(TargetNode, ToPin, EGPD_Input);
+	if (!OutPin) { OutError = FString::Printf(TEXT("Source output pin not found (%s)"), *FromPin); return false; }
+	if (!InPin) { OutError = FString::Printf(TEXT("Target input pin not found (%s)"), *ToPin); return false; }
+
+	InPin->BreakAllPinLinks();
+	OutPin->MakeLinkTo(InPin);
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
 	return true;

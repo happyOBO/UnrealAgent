@@ -42,6 +42,23 @@ public:
 	/** 진입 스테이트를 설정합니다 (Entry → State 재연결). */
 	static bool SetEntryState(UAnimBlueprint* AnimBP, const FString& StateMachineName, const FString& StateName, FString& OutError);
 
+	// ── 메인 AnimGraph 노드 추가 (스테이트 머신 외) ──
+	// Python `unreal` API로 불가능한 AnimGraph 노드 생성을 네이티브로 수행합니다.
+	// 생성된 노드는 NodeGuid 문자열로 식별하며, OutNodeId로 반환합니다.
+
+	/** 메인 AnimGraph에 Slot 노드를 추가합니다 (몽타주 슬롯 재생). */
+	static bool AddSlotNode(UAnimBlueprint* AnimBP, const FString& SlotName, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError);
+
+	/** 메인 AnimGraph에 LayeredBlendPerBone 노드를 추가합니다 (지정 본들을 하나의 블렌드 레이어로 구성). */
+	static bool AddLayeredBlendPerBone(UAnimBlueprint* AnimBP, const TArray<FString>& BoneNames, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError);
+
+	/**
+	 * 메인 AnimGraph의 두 노드를 연결합니다 (포즈 핀).
+	 * 노드는 NodeGuid 문자열로 지정하며, 대상에 "output"/"result"를 주면 Output Pose(Root)에 연결합니다.
+	 * 핀 이름이 비어 있으면 소스는 첫 출력 핀, 대상은 첫 입력 핀을 사용합니다.
+	 */
+	static bool ConnectAnimNodes(UAnimBlueprint* AnimBP, const FString& FromNodeId, const FString& FromPin, const FString& ToNodeId, const FString& ToPin, FString& OutError);
+
 	/** 컴파일하고 저장 마크합니다. */
 	static FString CompileAndSave(UAnimBlueprint* AnimBP, bool& bOutSuccess);
 
@@ -52,4 +69,10 @@ private:
 
 	/** 노드의 지정 방향 첫 핀을 반환합니다. */
 	static UEdGraphPin* FirstPin(UEdGraphNode* Node, int32 Direction);
+
+	/** 메인 AnimGraph에서 NodeGuid 문자열로 노드를 찾습니다. */
+	static UEdGraphNode* FindNodeById(UEdGraph* AnimGraph, const FString& NodeId);
+
+	/** 노드에서 지정 방향의 핀을 이름으로 찾습니다. 이름이 비면 첫 핀을 반환합니다. */
+	static UEdGraphPin* FindPin(UEdGraphNode* Node, const FString& PinName, int32 Direction);
 };

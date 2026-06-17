@@ -17,6 +17,12 @@ FString FAnimBlueprintModifyTool::ToolDescription() const
 		"- set_state_animation: state_machine, state_name, anim_sequence (asset path)\n"
 		"- set_entry_state: state_machine, state_name\n"
 		"\n"
+		"AnimGraph node ops (main AnimGraph, not state machine). add_* returns a node id (NodeGuid):\n"
+		"- add_slot_node: slot_name, [pos_x], [pos_y] -> plays a montage slot\n"
+		"- add_layered_blend_per_bone: bones (comma-separated), [pos_x], [pos_y]\n"
+		"- connect_anim_nodes: from_node_id, to_node_id (or 'output'/'result' for Output Pose),\n"
+		"    [from_pin], [to_pin] (pose pins; default first output/input pin)\n"
+		"\n"
 		"Typical flow: create_state_machine -> add_state (x2) -> set_state_animation each\n"
 		"-> set_entry_state -> add_transition.");
 }
@@ -69,6 +75,33 @@ FMcpResponse FAnimBlueprintModifyTool::Execute()
 		if (!FAnimBlueprintEditor::SetEntryState(AnimBP, StateMachine, StateName, Error))
 			return FMcpResponse::Failure(Error);
 		Summary = FString::Printf(TEXT("Set entry state to '%s'."), *StateName);
+	}
+	else if (Operation.Equals(TEXT("add_slot_node"), ESearchCase::IgnoreCase))
+	{
+		if (SlotName.IsEmpty()) return FMcpResponse::Failure(TEXT("add_slot_node requires 'slot_name'"));
+		FString NodeId;
+		if (!FAnimBlueprintEditor::AddSlotNode(AnimBP, SlotName, PosX, PosY, NodeId, Error))
+			return FMcpResponse::Failure(Error);
+		Summary = FString::Printf(TEXT("Added slot node '%s'. node_id=%s"), *SlotName, *NodeId);
+	}
+	else if (Operation.Equals(TEXT("add_layered_blend_per_bone"), ESearchCase::IgnoreCase))
+	{
+		TArray<FString> BoneList;
+		Bones.ParseIntoArray(BoneList, TEXT(","), true);
+		for (FString& Bone : BoneList) { Bone = Bone.TrimStartAndEnd(); }
+		BoneList.RemoveAll([](const FString& B) { return B.IsEmpty(); });
+
+		FString NodeId;
+		if (!FAnimBlueprintEditor::AddLayeredBlendPerBone(AnimBP, BoneList, PosX, PosY, NodeId, Error))
+			return FMcpResponse::Failure(Error);
+		Summary = FString::Printf(TEXT("Added LayeredBlendPerBone (%d bone(s)). node_id=%s"), BoneList.Num(), *NodeId);
+	}
+	else if (Operation.Equals(TEXT("connect_anim_nodes"), ESearchCase::IgnoreCase))
+	{
+		if (FromNodeId.IsEmpty() || ToNodeId.IsEmpty()) return FMcpResponse::Failure(TEXT("connect_anim_nodes requires 'from_node_id' and 'to_node_id'"));
+		if (!FAnimBlueprintEditor::ConnectAnimNodes(AnimBP, FromNodeId, FromPin, ToNodeId, ToPin, Error))
+			return FMcpResponse::Failure(Error);
+		Summary = FString::Printf(TEXT("Connected %s -> %s."), *FromNodeId, *ToNodeId);
 	}
 	else
 	{

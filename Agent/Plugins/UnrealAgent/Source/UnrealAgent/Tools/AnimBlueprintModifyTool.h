@@ -15,9 +15,9 @@ struct FAnimBlueprintModifyTool : public FMcpTool
 {
 	GENERATED_BODY()
 
-	/** create_state_machine | add_state | add_transition | set_state_animation | set_entry_state */
+	/** state machine ops 또는 AnimGraph 노드 ops */
 	UPROPERTY(meta=(ToolParam="operation", Required,
-		Description="One of: create_state_machine, add_state, add_transition, set_state_animation, set_entry_state"))
+		Description="One of: create_state_machine, add_state, add_transition, set_state_animation, set_entry_state, add_slot_node, add_layered_blend_per_bone, connect_anim_nodes"))
 	FString Operation;
 
 	/** 대상 Animation Blueprint 경로 (예: /Game/Characters/ABP_Hero) */
@@ -47,11 +47,37 @@ struct FAnimBlueprintModifyTool : public FMcpTool
 		Description="[set_state_animation] Anim sequence asset path"))
 	FString AnimSequence;
 
-	UPROPERTY(meta=(ToolParam="pos_x", Description="[create_state_machine/add_state] X position"))
+	UPROPERTY(meta=(ToolParam="pos_x", Description="[create_state_machine/add_state/add_slot_node/add_layered_blend_per_bone] X position"))
 	int32 PosX = 0;
 
-	UPROPERTY(meta=(ToolParam="pos_y", Description="[create_state_machine/add_state] Y position"))
+	UPROPERTY(meta=(ToolParam="pos_y", Description="[create_state_machine/add_state/add_slot_node/add_layered_blend_per_bone] Y position"))
 	int32 PosY = 0;
+
+	// ── AnimGraph 노드 ops 파라미터 ──
+
+	UPROPERTY(meta=(ToolParam="slot_name",
+		Description="[add_slot_node] Montage slot name to play (e.g. DefaultSlot)"))
+	FString SlotName;
+
+	UPROPERTY(meta=(ToolParam="bones",
+		Description="[add_layered_blend_per_bone] Comma-separated bone names for the blend layer (e.g. spine_01,spine_02)"))
+	FString Bones;
+
+	UPROPERTY(meta=(ToolParam="from_node_id",
+		Description="[connect_anim_nodes] Source node id (NodeGuid returned by add_*_node)"))
+	FString FromNodeId;
+
+	UPROPERTY(meta=(ToolParam="from_pin",
+		Description="[connect_anim_nodes] Source output pin name (optional; default first output pin)"))
+	FString FromPin;
+
+	UPROPERTY(meta=(ToolParam="to_node_id",
+		Description="[connect_anim_nodes] Target node id, or 'output'/'result' for the Output Pose"))
+	FString ToNodeId;
+
+	UPROPERTY(meta=(ToolParam="to_pin",
+		Description="[connect_anim_nodes] Target input pin name (optional; default first input pin)"))
+	FString ToPin;
 
 	virtual FString ToolDescription() const override;
 	virtual FMcpResponse Execute() override;
