@@ -30,7 +30,10 @@ keywords:
 
 전형적 흐름: `create_state_machine` → `add_state`×2 → 각 스테이트 `set_state_animation` → `set_entry_state` → `add_transition`.
 
-**AnimGraph 노드 추가도 `anim_blueprint_modify` 네이티브 도구로 한다** (Python으로 불가능). 메인 AnimGraph 대상이며 `add_*`는 노드 id(NodeGuid)를 반환한다:
+**AnimGraph 조회/추가는 `anim_blueprint_modify` 네이티브 도구로 한다** (Python으로 불가능).
+- 조회: `get_anim_graph` (읽기 전용) — 노드 type/node_id/slot_name/state_machine/핀 연결을 반환. **Python으로 핀/GUID/연결을 introspection하려 하지 말 것** (`get_all_pins`/`export_text`/`pins` 속성 없음, 시간 낭비). 또한 확인 목적으로 에디터를 열지 말 것 — 잘못하면 크래시한다.
+
+메인 AnimGraph 대상이며 `add_*`는 노드 id(NodeGuid)를 반환한다:
 - `add_slot_node` (slot_name) — 몽타주 슬롯 재생 노드
 - `add_layered_blend_per_bone` (bones: 쉼표 구분 본 이름) — 본별 레이어 블렌드 노드
 - `connect_anim_nodes` (from_node_id, to_node_id; to에 `output`/`result`를 주면 Output Pose에 연결; from_pin/to_pin 생략 시 첫 출력/입력 포즈 핀)

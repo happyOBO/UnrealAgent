@@ -6,8 +6,11 @@
 FString FAnimBlueprintModifyTool::ToolDescription() const
 {
 	return TEXT(
-		"Edit an Animation Blueprint's state machine natively (operations Python cannot do).\n"
-		"After any op the AnimBP is compiled and marked dirty. Parameters are flat.\n"
+		"Edit/inspect an Animation Blueprint natively (operations Python cannot do).\n"
+		"After any write op the AnimBP is compiled and marked dirty. Parameters are flat.\n"
+		"\n"
+		"- get_anim_graph: (read-only) lists main AnimGraph nodes with type, node_id (NodeGuid),\n"
+		"    slot_name/state_machine, and pin connections. Use this instead of Python introspection.\n"
 		"\n"
 		"- create_state_machine: state_machine, [pos_x], [pos_y]\n"
 		"    Also connects the state machine output to the AnimGraph Output Pose.\n"
@@ -38,6 +41,15 @@ FMcpResponse FAnimBlueprintModifyTool::Execute()
 	UAnimBlueprint* AnimBP = FAnimBlueprintEditor::LoadAnimBlueprint(BlueprintPath, Error);
 	if (!AnimBP)
 		return FMcpResponse::Failure(Error);
+
+	// 읽기 전용 조회: 컴파일/저장 없이 조기 반환합니다.
+	if (Operation.Equals(TEXT("get_anim_graph"), ESearchCase::IgnoreCase))
+	{
+		const FString Info = FAnimBlueprintEditor::GetAnimGraphInfo(AnimBP, Error);
+		if (!Error.IsEmpty())
+			return FMcpResponse::Failure(Error);
+		return FMcpResponse::Success(Info);
+	}
 
 	FString Summary;
 

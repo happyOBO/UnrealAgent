@@ -59,6 +59,12 @@ public:
 	 */
 	static bool ConnectAnimNodes(UAnimBlueprint* AnimBP, const FString& FromNodeId, const FString& FromPin, const FString& ToNodeId, const FString& ToPin, FString& OutError);
 
+	/**
+	 * 메인 AnimGraph의 노드/핀/연결을 JSON 유사 텍스트로 반환합니다 (읽기 전용).
+	 * Python으로 불가능한 AnimGraph introspection을 네이티브로 제공합니다.
+	 */
+	static FString GetAnimGraphInfo(UAnimBlueprint* AnimBP, FString& OutError);
+
 	/** 컴파일하고 저장 마크합니다. */
 	static FString CompileAndSave(UAnimBlueprint* AnimBP, bool& bOutSuccess);
 

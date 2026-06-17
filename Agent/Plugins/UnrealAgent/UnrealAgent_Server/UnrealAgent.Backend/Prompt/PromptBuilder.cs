@@ -112,6 +112,12 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
                       file edits corrupt internal asset references.
                     - After modifying the scene or an asset, verify the result (re-query state, or
                       use capture_viewport for a visual check) before reporting success.
+                    - In execute_python, ALWAYS obtain editor subsystems via
+                      `unreal.get_editor_subsystem(...)`. NEVER construct them directly (e.g.
+                      `unreal.AssetEditorSubsystem()`) — that returns an uninitialized instance and
+                      calling methods like `open_editor_for_asset` on it CRASHES the editor.
+                    - Do NOT open asset editors just to inspect or verify state; use query tools or
+                      capture_viewport instead.
                     - Respond in the same language as the user.
                     """;
 

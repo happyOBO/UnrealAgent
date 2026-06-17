@@ -474,6 +474,62 @@ bool FAnimBlueprintEditor::ConnectAnimNodes(UAnimBlueprint* AnimBP, const FStrin
 }
 
 //-----------------------------------------------------------------------------
+// AnimGraph 조회 (읽기 전용)
+//-----------------------------------------------------------------------------
+
+FString FAnimBlueprintEditor::GetAnimGraphInfo(UAnimBlueprint* AnimBP, FString& OutError)
+{
+	UEdGraph* AnimGraph = FindAnimGraph(AnimBP, OutError);
+	if (!AnimGraph) return FString();
+
+	FString Out = TEXT("{ \"nodes\": [");
+	bool bFirstNode = true;
+	for (UEdGraphNode* Node : AnimGraph->Nodes)
+	{
+		if (!Node) continue;
+		if (!bFirstNode) Out += TEXT(",");
+		bFirstNode = false;
+
+		Out += FString::Printf(TEXT("\n  { \"type\": \"%s\", \"node_id\": \"%s\""),
+			*Node->GetClass()->GetName(), *Node->NodeGuid.ToString());
+
+		if (const UAnimGraphNode_Slot* Slot = Cast<UAnimGraphNode_Slot>(Node))
+			Out += FString::Printf(TEXT(", \"slot_name\": \"%s\""), *Slot->Node.SlotName.ToString());
+		if (UAnimGraphNode_StateMachine* SM = Cast<UAnimGraphNode_StateMachine>(Node))
+			Out += FString::Printf(TEXT(", \"state_machine\": \"%s\""), *SM->GetStateMachineName());
+
+		Out += TEXT(", \"pins\": [");
+		bool bFirstPin = true;
+		for (UEdGraphPin* Pin : Node->Pins)
+		{
+			if (!Pin) continue;
+			if (!bFirstPin) Out += TEXT(",");
+			bFirstPin = false;
+
+			const TCHAR* Dir = (Pin->Direction == EGPD_Input) ? TEXT("input") : TEXT("output");
+			Out += FString::Printf(TEXT(" { \"name\": \"%s\", \"dir\": \"%s\", \"links\": ["),
+				*Pin->PinName.ToString(), Dir);
+
+			bool bFirstLink = true;
+			for (UEdGraphPin* Linked : Pin->LinkedTo)
+			{
+				if (!Linked) continue;
+				UEdGraphNode* LinkedNode = Linked->GetOwningNodeUnchecked();
+				if (!LinkedNode) continue;
+				if (!bFirstLink) Out += TEXT(",");
+				bFirstLink = false;
+				Out += FString::Printf(TEXT(" { \"node_id\": \"%s\", \"pin\": \"%s\" }"),
+					*LinkedNode->NodeGuid.ToString(), *Linked->PinName.ToString());
+			}
+			Out += TEXT(" ] }");
+		}
+		Out += TEXT(" ] }");
+	}
+	Out += TEXT("\n] }");
+	return Out;
+}
+
+//-----------------------------------------------------------------------------
 // 컴파일
 //-----------------------------------------------------------------------------
 
