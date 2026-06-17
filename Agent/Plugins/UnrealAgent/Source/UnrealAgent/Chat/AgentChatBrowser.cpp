@@ -1,4 +1,5 @@
 ﻿#include "Chat/AgentChatBrowser.h"
+#include "UnrealAgentSettings.h"
 #include "SWebBrowser.h"
 #include "WebBrowserModule.h"
 #include "IWebBrowserSingleton.h"
@@ -66,7 +67,9 @@ void SAgentChatBrowser::Construct(const FArguments& InArgs, const TSharedRef<SDo
 
 void SAgentChatBrowser::LoadServerUrl() const
 {
-	const FString Url = FString::Printf(TEXT("http://localhost:%d"), DefaultServerPort);
+	// 포트의 단일 출처는 settings.local.json입니다 (frontendPort). 없으면 기본값으로 폴백합니다.
+	const uint32 ServerPort = FUnrealAgentSettings::GetFrontendPort();
+	const FString Url = FString::Printf(TEXT("http://localhost:%d"), ServerPort);
 	WebBrowserWidget->LoadURL(Url);
 }
 

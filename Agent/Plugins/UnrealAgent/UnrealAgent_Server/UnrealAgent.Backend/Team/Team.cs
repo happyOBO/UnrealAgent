@@ -12,6 +12,12 @@ public record TeammateInfo(Process Process, int Port);
 /// </summary>
 public sealed class Team : IAsyncDisposable
 {
+    /// <summary>팀원 포트 탐색 시작 번호입니다.</summary>
+    private const int PortScanStart = 59000;
+
+    /// <summary>포트 탐색 시 시도할 포트 개수입니다.</summary>
+    private const int PortScanRange = 1000;
+
     /// <summary>현재 팀 이름입니다. 팀이 없으면 null입니다.</summary>
     public string? TeamName { get; set; }
     
@@ -189,11 +195,11 @@ public sealed class Team : IAsyncDisposable
     }
     
     /// <summary>사용 가능한 포트를 찾습니다.</summary>
-    private int FindAvailablePort(int StartPort = 59000)
+    private int FindAvailablePort(int StartPort = PortScanStart)
     {
         HashSet<int> UsedPorts = Teammates.Values.Select(t => t.Port).ToHashSet();
 
-        for (int Port = StartPort; Port < StartPort + 1000; Port++)
+        for (int Port = StartPort; Port < StartPort + PortScanRange; Port++)
         {
             if (UsedPorts.Contains(Port))
                 continue;

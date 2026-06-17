@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using UnrealAgent.Backend.Auth;
+using UnrealAgent.Frontend.Infrastructure;
 
 namespace UnrealAgent.Frontend.UI.Settings;
 
@@ -29,13 +30,13 @@ public partial class SettingsPanel
         if (string.IsNullOrWhiteSpace(ApiKeyInput))
         {
             StatusMessage = "API Key를 입력해주세요.";
-            StatusCss = "text-[#e05e5e]";
+            StatusCss = $"text-[{ChatColors.Error}]";
             return;
         }
 
         Auth.SetApiKey(ApiKeyInput.Trim());
         ApiKeyInput = "";
         StatusMessage = "API Key가 저장되었습니다.";
-        StatusCss = "text-[#4ba96c]";
+        StatusCss = $"text-[{ChatColors.Success}]";
     }
 }

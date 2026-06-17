@@ -14,6 +14,9 @@ namespace UnrealAgent.Backend.Agent;
 /// </summary>
 public sealed class AgentRunner(AgentSession Session, SessionStore SessionStore, IHostApplicationLifetime Lifetime) : BackgroundService
 {
+    /// <summary>메일박스/부모 생존을 확인하는 폴링 주기(ms)입니다.</summary>
+    private const int MailboxPollMs = 3000;
+
     /// <summary>반응형 상태 관리자입니다.</summary>
     public ChatStore Store { get; } = new();
     
@@ -48,8 +51,8 @@ public sealed class AgentRunner(AgentSession Session, SessionStore SessionStore,
     {
         while (!Ct.IsCancellationRequested)
         {
-            // 시그널 대기 — 사용자 입력 시 즉시, 아니면 3초마다 메일박스 확인
-            await Task.WhenAny(Signal.WaitAsync(Ct), Task.Delay(3000, Ct));
+            // 시그널 대기 — 사용자 입력 시 즉시, 아니면 폴링 주기마다 메일박스 확인
+            await Task.WhenAny(Signal.WaitAsync(Ct), Task.Delay(MailboxPollMs, Ct));
             
             // 부모 프로세스 생존 확인 (팀원일 때만)
             CheckParentAlive();

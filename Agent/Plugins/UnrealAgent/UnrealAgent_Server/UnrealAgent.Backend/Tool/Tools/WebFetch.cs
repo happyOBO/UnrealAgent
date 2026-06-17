@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Text.Json.Serialization;
 using Anthropic.Models.Messages;
 using UnrealAgent.Backend.Auth;
+using UnrealAgent.Backend.Model.Models;
 using UnrealAgent.Backend.Tool.Attributes;
 using ReverseMarkdown;
 using UnrealAgent.Backend.Agent;
@@ -359,7 +360,7 @@ public class WebFetch(AuthConfig Auth, IHttpClientFactory HttpClientFactory) : A
             // 6. Haiku 4.5 서브 호출로 요약 생성
             Message Response = await Auth.Client!.Messages.Create(new MessageCreateParams
             {
-                Model = "claude-haiku-4-5-20251001",
+                Model = Haiku45.ModelId,
                 MaxTokens = SummaryMaxTokens,
                 System = new List<TextBlockParam>(),
                 Messages =

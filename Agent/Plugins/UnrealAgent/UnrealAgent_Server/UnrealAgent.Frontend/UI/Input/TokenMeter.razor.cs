@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using UnrealAgent.Backend.Model;
 using UnrealAgent.Backend.Token;
+using UnrealAgent.Frontend.Infrastructure;
 
 namespace UnrealAgent.Frontend.UI.Input;
 
@@ -24,9 +25,9 @@ public partial class TokenMeter
     /// <summary>퍼센트 텍스트 색상입니다. 40% 이하 녹색, 70% 이하 주황, 초과 시 빨강입니다.</summary>
     private string PercentColorClass => UsagePercent switch
     {
-        <= 40 => "text-[#4ba96c]",
-        <= 70 => "text-[#d68a51]",
-        _ => "text-[#e05e5e]"
+        <= 40 => $"text-[{ChatColors.Success}]",
+        <= 70 => $"text-[{ChatColors.Warning}]",
+        _ => $"text-[{ChatColors.Error}]"
     };
 
     /// <summary>70% 초과 시 pulse 애니메이션을 추가합니다.</summary>
@@ -35,9 +36,9 @@ public partial class TokenMeter
     /// <summary>바 색상입니다.</summary>
     private string BarColorClass => UsagePercent switch
     {
-        <= 40 => "bg-[#4ba96c]",
-        <= 70 => "bg-[#d68a51]",
-        _ => "bg-[#e05e5e]"
+        <= 40 => $"bg-[{ChatColors.Success}]",
+        <= 70 => $"bg-[{ChatColors.Warning}]",
+        _ => $"bg-[{ChatColors.Error}]"
     };
 
     /// <summary>바 그림자입니다.</summary>

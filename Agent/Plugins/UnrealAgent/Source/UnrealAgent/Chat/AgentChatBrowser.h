@@ -41,7 +41,4 @@ private:
 
 	/** Slate PreShutdown 델리게이트 핸들 */
 	FDelegateHandle PreShutdownHandle;
-
-	/** 에이전트 서버 기본 포트 */
-	static constexpr uint32 DefaultServerPort = 55558;
 };

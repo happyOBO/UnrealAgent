@@ -1,4 +1,5 @@
 {
+  "frontendPort": 55558,
   "mcpServers": {
     "UnrealMCP": {
       "url": "http://localhost:55559/mcp"

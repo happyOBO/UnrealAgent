@@ -4,6 +4,7 @@ using UnrealAgent.Backend.Auth;
 using UnrealAgent.Backend.ClaudeCode;
 using UnrealAgent.Backend.Command;
 using UnrealAgent.Backend.Command.Commands;
+using UnrealAgent.Backend.Core;
 using UnrealAgent.Backend.Model;
 using UnrealAgent.Backend.Model.Models;
 using UnrealAgent.Backend.Prompt;
@@ -14,8 +15,10 @@ using UnrealAgent.Backend.Tool;
 using UnrealAgent.Backend.Tool.Tools;
 using UnrealAgent.Frontend.Infrastructure;
 
-// ── 커맨드라인 인자에서 포트 파싱 (팀원일 때) ──
-int Port = 55558;
+// ── 포트 결정 ──
+// 기본값은 settings.local.json(frontendPort)에서 읽습니다. 포트의 단일 출처이며 UE 플러그인도 같은 파일을 읽습니다.
+// 팀원 모드에서는 커맨드라인 --port가 우선합니다.
+int Port = AppSettings.GetFrontendPort();
 
 for (int i = 0; i < args.Length - 1; i++)
 {
@@ -62,9 +65,8 @@ Builder.Services.AddSingleton<PromptBuilder>();
 Builder.Services.AddSingleton<TokenTracker>();
 Builder.Services.AddSingleton<ContextRegistry>();
 
-// ── Tool 모듈 ──
+// ── Tool 모듈 (스키마는 토큰 사용량 측정에 사용) ──
 Builder.Services.AddSingleton<ToolRegistry>();
-Builder.Services.AddSingleton<ToolExecutor>();
 
 // ── Claude Code(CLI) 모듈 ──
 Builder.Services.AddSingleton<ClaudeCliLocator>();

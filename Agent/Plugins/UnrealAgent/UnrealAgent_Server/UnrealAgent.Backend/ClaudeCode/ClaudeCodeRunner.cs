@@ -13,6 +13,9 @@ namespace UnrealAgent.Backend.ClaudeCode;
 /// </summary>
 public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
 {
+    /// <summary>Dispose 시 프로세스 정상 종료를 기다리는 최대 시간(초)입니다. 초과하면 강제 종료합니다.</summary>
+    private const int KillTimeoutSeconds = 5;
+
     private Process? Proc;
     private string? SystemPromptFile;
     private readonly StringBuilder StdErr = new();
@@ -415,7 +418,7 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
 
             try
             {
-                using CancellationTokenSource Cts = new(TimeSpan.FromSeconds(5));
+                using CancellationTokenSource Cts = new(TimeSpan.FromSeconds(KillTimeoutSeconds));
                 await Proc.WaitForExitAsync(Cts.Token);
             }
             catch

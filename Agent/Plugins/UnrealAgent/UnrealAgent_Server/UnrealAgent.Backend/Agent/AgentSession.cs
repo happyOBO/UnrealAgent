@@ -12,9 +12,6 @@ namespace UnrealAgent.Backend.Agent;
 /// </summary>
 public sealed class AgentSession
 {
-    /// <summary>이 세션의 대화 히스토리입니다.</summary>
-    public Conversation.Conversation Conversation { get; } = new();
-
     /// <summary>팀 정보입니다.</summary>
     public Team.Team Team { get; } = new();
     

@@ -9,7 +9,10 @@
 
 namespace
 {
+	// 캡처 이미지의 최대 가로 픽셀. LLM 컨텍스트/전송 크기를 줄이기 위해 이 값으로 다운스케일합니다.
 	constexpr int32 MaxWidth = 1024;
+
+	// JPEG 압축 품질(0~100). 화질과 전송 크기의 절충값입니다.
 	constexpr int32 JPEGQuality = 70;
 
 	// 종횡비를 유지한 채 InPixels를 OutWidth x OutHeight로 최근접 다운스케일합니다.

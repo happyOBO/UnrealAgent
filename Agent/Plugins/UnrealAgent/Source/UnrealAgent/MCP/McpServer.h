@@ -9,7 +9,7 @@
 /**
  * MCP (Model Context Protocol) 서버입니다
  *
- * 에디터 시작 시 HTTP 서버(포트 55559)에서 MCP 프로토콜을 서빙합니다.
+ * 에디터 시작 시 HTTP 서버(포트는 settings.local.json, 기본 55559)에서 MCP 프로토콜을 서빙합니다.
  * FMcpTool 파생 구조체를 리플렉션으로 자동 검색하여 등록하고,
  * ToolParam UPROPERTY로부터 inputSchema를 자동 생성합니다.
  *
@@ -120,7 +120,4 @@ private:
 
 	/** Agent Server 프로세스 ID */
 	uint32 AgentServerProcessId = 0;
-
-	/** HTTP 서버 포트 */
-	static constexpr uint32 ServerPort = 55559;
 };

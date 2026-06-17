@@ -12,20 +12,26 @@ namespace UnrealAgent.Backend.Model;
 /// </summary>
 public sealed class ModelSettings(ModelRegistry Registry)
 {
+    /// <summary>기본 모델입니다 (저장된 설정이 없을 때 사용).</summary>
+    private static IModel DefaultModel => new Models.Opus46();
+
+    /// <summary>기본 사고 깊이입니다.</summary>
+    private const Effort DefaultEffort = Effort.High;
+
     /// <summary>설정 파일 경로입니다.</summary>
     private readonly string ConfigPath = Path.Combine(AgentPaths.UserConfigDir, "ModelSettings.json");
-    
+
     /// <summary>JSON 직렬화 옵션입니다.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-    
+
     /// <summary>현재 선택된 모델 정의입니다.</summary>
-    private IModel CurrentModel = new Models.Opus46();
-    
+    private IModel CurrentModel = DefaultModel;
+
     /// <summary>확장된 사고 활성화 여부 백킹 필드입니다.</summary>
     private bool ThinkingEnabled = true;
-    
+
     /// <summary>사고 깊이 백킹 필드입니다.</summary>
-    private Effort CurrentEffort = Effort.High;
+    private Effort CurrentEffort = DefaultEffort;
     
     /// <summary>API 모델 ID입니다.</summary>
     public string Model => CurrentModel.Id;

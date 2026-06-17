@@ -1,4 +1,7 @@
 ﻿#include "McpServer.h"
+#include "UnrealAgentSettings.h"
+#include "HAL/PlatformMisc.h"
+#include "Misc/Paths.h"
 #include "HttpServerModule.h"
 #include "IHttpRouter.h"
 #include "HttpServerRequest.h"
@@ -6,6 +9,27 @@
 #include UE_INLINE_GENERATED_CPP_BY_NAME(McpServer)
 
 DEFINE_LOG_CATEGORY_STATIC(McpServerLog, Log, All);
+
+namespace
+{
+	/** 프론트엔드(Agent Server) 실행 파일 이름입니다. */
+	const TCHAR* const FrontendExeName = TEXT("UnrealAgent.Frontend.exe");
+
+	/** 플러그인 디렉토리 기준 프론트엔드 실행 파일의 상대 경로 세그먼트입니다. */
+	const TCHAR* const FrontendBuildDir = TEXT("UnrealAgent_Server/Build/Release");
+
+	/** taskkill.exe 전체 경로를 반환합니다. %SystemRoot% 기준으로 조립하며, 없으면 기본 경로로 폴백합니다. */
+	FString GetTaskKillPath()
+	{
+		const FString SystemRoot = FPlatformMisc::GetEnvironmentVariable(TEXT("SystemRoot"));
+		if (!SystemRoot.IsEmpty())
+		{
+			return FPaths::Combine(SystemRoot, TEXT("System32"), TEXT("taskkill.exe"));
+		}
+
+		return TEXT("C:/Windows/System32/taskkill.exe");
+	}
+}
 
 //-----------------------------------------------------------------------------
 // UEditorSubsystem 오버라이드
@@ -37,8 +61,9 @@ void UMcpServer::KillExistingAgentServer() const
 	int32 ReturnCode;
 	FString StdOut, StdErr;
 
+	const FString TaskKillArgs = FString::Printf(TEXT("/f /im %s"), FrontendExeName);
 	FPlatformProcess::ExecProcess(
-		TEXT("C:\\Windows\\System32\\taskkill.exe"), TEXT("/f /im UnrealAgent.Frontend.exe"),
+		*GetTaskKillPath(), *TaskKillArgs,
 		&ReturnCode, &StdOut, &StdErr);
 }
 
@@ -55,7 +80,7 @@ void UMcpServer::StartServer()
 
 	const FString ServerExePath = FPaths::ConvertRelativePathToFull(
 		FPaths::Combine(FPaths::ProjectPluginsDir(),
-			TEXT("UnrealAgent"), TEXT("UnrealAgent_Server"), TEXT("Build"), TEXT("Release"), TEXT("UnrealAgent.Frontend.exe")));
+			TEXT("UnrealAgent"), FrontendBuildDir, FrontendExeName));
 
 	if (!FPaths::FileExists(ServerExePath))
 	{
@@ -104,6 +129,9 @@ void UMcpServer::StopServer()
 
 void UMcpServer::StartHttpServer()
 {
+	// 포트의 단일 출처는 settings.local.json입니다 (mcpServers.UnrealMCP.url). 없으면 기본값으로 폴백합니다.
+	const uint32 ServerPort = FUnrealAgentSettings::GetMcpServerPort();
+
 	FHttpServerModule& HttpServerModule = FHttpServerModule::Get();
 	HttpRouter = HttpServerModule.GetHttpRouter(ServerPort);
 
