@@ -16,6 +16,8 @@
 #include "AnimGraphNode_Root.h"
 #include "AnimGraphNode_Slot.h"
 #include "AnimGraphNode_LayeredBoneBlend.h"
+#include "AnimGraphNode_RotationOffsetBlendSpace.h"
+#include "Animation/AimOffsetBlendSpace.h"
 #include "AnimStateNode.h"
 #include "AnimStateTransitionNode.h"
 #include "AnimStateEntryNode.h"
@@ -433,6 +435,33 @@ bool FAnimBlueprintEditor::AddLayeredBlendPerBone(UAnimBlueprint* AnimBP, const 
 	NodeCreator.Finalize();
 
 	OutNodeId = BlendNode->NodeGuid.ToString();
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
+	return true;
+}
+
+bool FAnimBlueprintEditor::AddAimOffsetNode(UAnimBlueprint* AnimBP, const FString& AimOffsetPath, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError)
+{
+	UEdGraph* AnimGraph = FindAnimGraph(AnimBP, OutError);
+	if (!AnimGraph) return false;
+
+	UObject* Loaded = StaticLoadObject(UAimOffsetBlendSpace::StaticClass(), nullptr, *AimOffsetPath);
+	if (!Loaded && !AimOffsetPath.StartsWith(TEXT("/")))
+		Loaded = StaticLoadObject(UAimOffsetBlendSpace::StaticClass(), nullptr, *(TEXT("/Game/") + AimOffsetPath));
+	UAimOffsetBlendSpace* AimOffset = Cast<UAimOffsetBlendSpace>(Loaded);
+	if (!AimOffset)
+	{
+		OutError = FString::Printf(TEXT("AimOffset not found: %s"), *AimOffsetPath);
+		return false;
+	}
+
+	FGraphNodeCreator<UAnimGraphNode_RotationOffsetBlendSpace> NodeCreator(*AnimGraph);
+	UAnimGraphNode_RotationOffsetBlendSpace* AimNode = NodeCreator.CreateNode();
+	AimNode->NodePosX = PosX;
+	AimNode->NodePosY = PosY;
+	AimNode->SetAnimationAsset(AimOffset);
+	NodeCreator.Finalize();
+
+	OutNodeId = AimNode->NodeGuid.ToString();
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
 	return true;
 }

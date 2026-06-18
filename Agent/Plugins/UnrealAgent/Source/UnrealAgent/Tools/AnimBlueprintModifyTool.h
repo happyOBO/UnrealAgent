@@ -17,7 +17,7 @@ struct FAnimBlueprintModifyTool : public FMcpTool
 
 	/** state machine ops, AnimGraph 노드 ops, 또는 읽기 전용 조회 */
 	UPROPERTY(meta=(ToolParam="operation", Required,
-		Description="One of: get_anim_graph, create_state_machine, add_state, add_transition, set_state_animation, set_entry_state, add_slot_node, add_layered_blend_per_bone, connect_anim_nodes"))
+		Description="One of: get_anim_graph, create_state_machine, add_state, add_transition, set_state_animation, set_entry_state, add_slot_node, add_layered_blend_per_bone, add_aim_offset_node, connect_anim_nodes"))
 	FString Operation;
 
 	/** 대상 Animation Blueprint 경로 (예: /Game/Characters/ABP_Hero) */
@@ -62,6 +62,10 @@ struct FAnimBlueprintModifyTool : public FMcpTool
 	UPROPERTY(meta=(ToolParam="bones",
 		Description="[add_layered_blend_per_bone] Comma-separated bone names for the blend layer (e.g. spine_01,spine_02)"))
 	FString Bones;
+
+	UPROPERTY(meta=(ToolParam="aim_offset_path",
+		Description="[add_aim_offset_node] AimOffset (UAimOffsetBlendSpace) asset path to play"))
+	FString AimOffsetPath;
 
 	UPROPERTY(meta=(ToolParam="from_node_id",
 		Description="[connect_anim_nodes] Source node id (NodeGuid returned by add_*_node)"))

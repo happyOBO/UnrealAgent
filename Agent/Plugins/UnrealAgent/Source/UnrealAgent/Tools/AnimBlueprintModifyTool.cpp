@@ -23,6 +23,9 @@ FString FAnimBlueprintModifyTool::ToolDescription() const
 		"AnimGraph node ops (main AnimGraph, not state machine). add_* returns a node id (NodeGuid):\n"
 		"- add_slot_node: slot_name, [pos_x], [pos_y] -> plays a montage slot\n"
 		"- add_layered_blend_per_bone: bones (comma-separated), [pos_x], [pos_y]\n"
+		"- add_aim_offset_node: aim_offset_path, [pos_x], [pos_y] -> plays an AimOffset.\n"
+		"    Wire its base pose with connect_anim_nodes (its first input pose pin is the Base Pose).\n"
+		"    Yaw/Pitch float pins are bound in-editor/later (not by this tool).\n"
 		"- connect_anim_nodes: from_node_id, to_node_id (or 'output'/'result' for Output Pose),\n"
 		"    [from_pin], [to_pin] (pose pins; default first output/input pin)\n"
 		"\n"
@@ -107,6 +110,14 @@ FMcpResponse FAnimBlueprintModifyTool::Execute()
 		if (!FAnimBlueprintEditor::AddLayeredBlendPerBone(AnimBP, BoneList, PosX, PosY, NodeId, Error))
 			return FMcpResponse::Failure(Error);
 		Summary = FString::Printf(TEXT("Added LayeredBlendPerBone (%d bone(s)). node_id=%s"), BoneList.Num(), *NodeId);
+	}
+	else if (Operation.Equals(TEXT("add_aim_offset_node"), ESearchCase::IgnoreCase))
+	{
+		if (AimOffsetPath.IsEmpty()) return FMcpResponse::Failure(TEXT("add_aim_offset_node requires 'aim_offset_path'"));
+		FString NodeId;
+		if (!FAnimBlueprintEditor::AddAimOffsetNode(AnimBP, AimOffsetPath, PosX, PosY, NodeId, Error))
+			return FMcpResponse::Failure(Error);
+		Summary = FString::Printf(TEXT("Added AimOffset node '%s'. node_id=%s"), *AimOffsetPath, *NodeId);
 	}
 	else if (Operation.Equals(TEXT("connect_anim_nodes"), ESearchCase::IgnoreCase))
 	{

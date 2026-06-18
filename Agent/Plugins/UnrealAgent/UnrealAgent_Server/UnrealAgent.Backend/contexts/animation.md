@@ -17,6 +17,12 @@ keywords:
   - state machine
   - 스테이트 머신
   - blend space
+  - blendspace
+  - aim offset
+  - aimoffset
+  - aim
+  - 에임
+  - 에임오프셋
   - animinstance
   - retarget
 ---
@@ -42,6 +48,21 @@ keywords:
 - `create` (montage_path, skeleton 또는 anim_sequence)
 - `add_slot` / `rename_slot` (slot_name, new_slot_name) / `add_segment` (slot_name, anim_sequence, start_time)
 - `get_info` — 슬롯/세그먼트 구성 조회
+
+**Aim Offset(에임 오프셋)은 `aim_offset_modify`(에셋) + `anim_blueprint_modify`(노드) 네이티브 도구로 한다.** Python으로 BlendSpace 샘플/축 편집은 불가능하다(`SampleData`/`AddSample` 차단). Aim offset은 `UAimOffsetBlendSpace`(BlendSpace의 additive 특화)다.
+
+`aim_offset_modify` — 에셋 생성/샘플 편집:
+- `create` (aim_offset_path, skeleton) — 스켈레톤 명시 필수. 기본 Yaw/Pitch 축으로 생성.
+- `add_sample` (aim_offset_path, anim_sequence, yaw, pitch) — 코너 포즈(additive 시퀀스)를 Yaw/Pitch 좌표에 추가. 좌표가 축 범위 밖이면 범위를 자동 확장한다.
+- `get_info` (aim_offset_path) — 축 이름/범위와 샘플 목록 조회. **확인 목적으로 에디터를 열지 말 것**(크래시 위험) — get_info로 확인한다.
+
+`anim_blueprint_modify` — 메인 AnimGraph에 aim offset 재생 노드 배치:
+- `add_aim_offset_node` (aim_offset_path) — `UAnimGraphNode_RotationOffsetBlendSpace` 노드를 추가하고 node_id(NodeGuid) 반환.
+- base pose 연결은 `connect_anim_nodes`로 한다(aim offset 노드의 첫 입력 포즈 핀이 Base Pose). aim offset 출력은 다시 Output Pose나 후속 노드로 연결.
+
+전형적 흐름: `aim_offset_modify create` → `add_sample`×N(Yaw/Pitch 코너) → `anim_blueprint_modify add_aim_offset_node` → `connect_anim_nodes`(base pose 입력, 그리고 aim offset → output) → 컴파일(쓰기 op 후 자동).
+
+한계 — 다음은 미지원이며 에디터에서 수동으로 한다: Yaw/Pitch float 핀의 변수 바인딩, 축 범위/그리드 분할 커스터마이즈. 한계는 사용자에게 보고한다.
 
 애님 시퀀스 조회, 노티파이 추가, 커브 조작 등 데이터 수준 작업은 아래 Python으로 가능하다.
 

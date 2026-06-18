@@ -52,6 +52,9 @@ public:
 	/** 메인 AnimGraph에 LayeredBlendPerBone 노드를 추가합니다 (지정 본들을 하나의 블렌드 레이어로 구성). */
 	static bool AddLayeredBlendPerBone(UAnimBlueprint* AnimBP, const TArray<FString>& BoneNames, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError);
 
+	/** 메인 AnimGraph에 AimOffset(RotationOffsetBlendSpace) 노드를 추가합니다. Base Pose 연결은 ConnectAnimNodes로 별도 수행합니다. */
+	static bool AddAimOffsetNode(UAnimBlueprint* AnimBP, const FString& AimOffsetPath, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError);
+
 	/**
 	 * 메인 AnimGraph의 두 노드를 연결합니다 (포즈 핀).
 	 * 노드는 NodeGuid 문자열로 지정하며, 대상에 "output"/"result"를 주면 Output Pose(Root)에 연결합니다.
