@@ -34,8 +34,61 @@ public partial class ToolBlock : IDisposable
         "web_search" => WebSearchBlock.GetInfo(Message),
         "web_fetch"  => WebFetchBlock.GetInfo(Message),
         _ when CodeBlock.IsCodeTool(Message.Name) => CodeBlock.GetInfo(Message),
-        _            => new("terminal", "Tool:", "font-mono", Message.Name)
+        _            => new("terminal", "Tool:", "font-mono", BuildDisplayName())
     };
+
+    /// <summary>
+    /// 요약줄에 표시할 이름입니다. 디버깅을 위해 도구별 핵심 인자(operation 등)를
+    /// "&lt;tool&gt; · &lt;detail&gt;" 형태로 덧붙입니다. 입력에 없으면 도구명만 표시합니다.
+    /// </summary>
+    private string BuildDisplayName()
+    {
+        string Bare = BareToolName(Message.Name);
+
+        // 도구별 핵심 인자 — 이름에서 무슨 일을 하는지 한눈에 보이게 합니다.
+        string Detail = Bare switch
+        {
+            "anim_blueprint_modify" => JoinDetail(Field("operation"), ShortPath(Field("blueprint_path"))),
+            "blueprint_modify"      => JoinDetail(Field("operation"), ShortPath(Field("blueprint_path"))),
+            "montage_modify"        => JoinDetail(Field("operation"), ShortPath(Field("montage_path"))),
+            "Glob" or "Grep"        => Field("pattern"),
+            "Read" or "Edit" or "Write" => ShortPath(Field("file_path")),
+            "Agent"                 => Field("description"),
+            "ToolSearch"            => Field("query"),
+            "Bash"                  => Field("description"),
+            _                       => ""
+        };
+
+        return string.IsNullOrEmpty(Detail) ? Bare : $"{Bare} · {Detail}";
+    }
+
+    /// <summary>입력 JSON에서 문자열 필드를 추출합니다.</summary>
+    private string Field(string Key) => ChatUIMessage.Tool.GetInputField(Message.Input, Key);
+
+    /// <summary>경로의 마지막 세그먼트(파일/에셋 이름)만 반환합니다.</summary>
+    private static string ShortPath(string Path)
+    {
+        if (string.IsNullOrEmpty(Path))
+            return "";
+
+        int Slash = Path.Replace('\\', '/').LastIndexOf('/');
+        return Slash >= 0 && Slash + 1 < Path.Length ? Path[(Slash + 1)..] : Path;
+    }
+
+    /// <summary>비어 있지 않은 조각만 공백으로 잇습니다.</summary>
+    private static string JoinDetail(params string[] Parts)
+        => string.Join(" ", Parts.Where(P => !string.IsNullOrEmpty(P)));
+
+    /// <summary>mcp__&lt;server&gt;__&lt;tool&gt; 접두사를 벗겨 순수 도구명을 반환합니다.</summary>
+    private static string BareToolName(string Name)
+    {
+        const string Mcp = "mcp__";
+        if (!Name.StartsWith(Mcp, StringComparison.Ordinal))
+            return Name;
+
+        int Last = Name.LastIndexOf("__", StringComparison.Ordinal);
+        return Last >= 0 && Last + 2 < Name.Length ? Name[(Last + 2)..] : Name;
+    }
 
     //--------------------------------------------------------------------------
     // 라이프사이클

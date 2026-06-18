@@ -1,0 +1,40 @@
+<!-- 전용 렌더러가 없는 도구의 범용 입력/결과 표시입니다. -->
+@{
+    var Pairs = InputPairs();
+}
+@if (Pairs.Count > 0)
+{
+    <div class="px-3 py-1.5 bg-[#151515] text-[#888] border-b border-[#222] uppercase font-bold tracking-wider text-[9px]">Input</div>
+    <div class="bg-[#0a0a0a] p-3 max-h-48 overflow-y-auto font-mono text-[11px] leading-relaxed">
+        @foreach (var (Key, Value) in Pairs)
+        {
+            <div class="flex gap-2">
+                @if (!string.IsNullOrEmpty(Key))
+                {
+                    <span class="text-[#7aa2d8] shrink-0">@Key</span>
+                    <span class="text-[#555]">:</span>
+                }
+                <span class="text-[#cfcfcf] whitespace-pre-wrap break-all">@Value</span>
+            </div>
+        }
+    </div>
+}
+
+<div class="border-t border-[#222] px-3 py-1.5 bg-[#151515] text-[#888] uppercase font-bold tracking-wider text-[9px]">Result</div>
+<div class="p-3 max-h-48 overflow-y-auto font-mono text-[11px] leading-relaxed bg-[#0a0a0a]">
+    @if (!Message.bIsCompleted)
+    {
+        <div class="animate-pulse text-[#d68a51]">결과 대기중…</div>
+    }
+    else if (string.IsNullOrEmpty(Message.Content))
+    {
+        <div class="text-[#666]">(결과 없음)</div>
+    }
+    else
+    {
+        @foreach (var Line in OutputLines())
+        {
+            <div class="flex gap-2">@((MarkupString)FormatOutputLine(Line))</div>
+        }
+    }
+</div>

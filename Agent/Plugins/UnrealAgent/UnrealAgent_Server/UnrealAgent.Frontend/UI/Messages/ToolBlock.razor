@@ -39,6 +39,11 @@
             {
                 <CodeBlock Message="Message"/>
             }
+            else
+            {
+                <!-- 전용 렌더러가 없는 도구(MCP·Glob·Read·Agent 등): 입력/결과를 그대로 표시 -->
+                <GenericToolBlock Message="Message"/>
+            }
         </div>
     </details>
 

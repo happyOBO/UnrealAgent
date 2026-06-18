@@ -20,6 +20,9 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
     private string? SystemPromptFile;
     private readonly StringBuilder StdErr = new();
 
+    /// <summary>CLI stderr를 실시간 기록하는 로그 파일 경로입니다. stall(EOF 없음) 중에도 원인을 남깁니다.</summary>
+    private string? StdErrLogPath;
+
     /// <summary>
     /// CLI를 실행하고 stream-json 이벤트를 순차적으로 방출합니다.
     /// Permission 아이템 수신 시 소비자가 Decision을 설정하면 control_response를 전송합니다.
@@ -43,14 +46,20 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
             yield break;
         }
 
-        // stderr를 백그라운드로 흡수하여 파이프 버퍼 블로킹을 방지합니다.
+        // CLI stderr를 실시간으로 파일에 기록합니다. EOF가 없는 stall 중에도 원인이 남도록 합니다.
+        InitStdErrLog(Options.Model);
+
+        // stderr를 백그라운드로 흡수하여 파이프 버퍼 블로킹을 방지하고, 도착 즉시 파일에 남깁니다.
         _ = Task.Run(async () =>
         {
             try
             {
                 string? Line;
                 while ((Line = await Proc.StandardError.ReadLineAsync()) != null)
+                {
                     lock (StdErr) StdErr.AppendLine(Line);
+                    AppendStdErrLog(Line);
+                }
             }
             catch { /* 종료 시 무시 */ }
         }, Ct);
@@ -236,7 +245,12 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
                     TurnEnd = true;
                     break;
 
-                // rate_limit_event, control_response(우리 init에 대한 응답) 등은 무시
+                case "rate_limit_event":
+                    // 무시하지 않고 표면화: 레이트리밋/지연이 "그냥 멈춤"처럼 보이는 것을 막습니다.
+                    Items.Add(BuildRateLimitNotice(Root));
+                    break;
+
+                // control_response(우리 init에 대한 응답) 등은 무시
             }
         }
 
@@ -337,6 +351,16 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
         Items.Add(new ClaudeStreamItem.Permission(RequestId, ToolName, InputJson, ToolUseId));
     }
 
+    /// <summary>rate_limit_event를 정보성 Notice로 변환합니다. 스키마가 버전마다 달라 원문을 축약 표면화합니다.</summary>
+    private static ClaudeStreamItem.Notice BuildRateLimitNotice(JsonElement Root)
+    {
+        string Raw = Root.GetRawText();
+        if (Raw.Length > 500)
+            Raw = Raw[..500] + " …";
+
+        return new ClaudeStreamItem.Notice($"⏳ 레이트리밋/지연 이벤트 수신 (응답이 지연될 수 있음): {Raw}");
+    }
+
     /// <summary>result 이벤트에서 사용량/비용을 추출합니다.</summary>
     private static ClaudeStreamItem.Result BuildResult(JsonElement Root)
     {
@@ -397,9 +421,40 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
         string Err;
         lock (StdErr) Err = StdErr.ToString().Trim();
 
+        string PathHint = StdErrLogPath is null ? "" : $" (자세한 로그: {StdErrLogPath})";
+
         return new ClaudeStreamItem.Failure(string.IsNullOrEmpty(Err)
-            ? "claude 프로세스가 응답 없이 종료되었습니다."
-            : $"claude 오류: {Err}");
+            ? $"claude 프로세스가 응답 없이 종료되었습니다.{PathHint}"
+            : $"claude 오류: {Err}{PathHint}");
+    }
+
+    // ── stderr 실시간 로깅 ──
+
+    /// <summary>stderr 로그 파일을 준비하고 턴 시작 헤더를 기록합니다.</summary>
+    private void InitStdErrLog(string Model)
+    {
+        try
+        {
+            StdErrLogPath = Path.Combine(Path.GetTempPath(), "UnrealAgent", "cli-stderr.log");
+            Directory.CreateDirectory(Path.GetDirectoryName(StdErrLogPath)!);
+            File.AppendAllText(StdErrLogPath,
+                $"{Environment.NewLine}=== turn start {DateTime.Now:yyyy-MM-dd HH:mm:ss} model={Model} ==={Environment.NewLine}");
+        }
+        catch
+        {
+            // 로깅 실패는 본 기능에 영향을 주지 않습니다.
+            StdErrLogPath = null;
+        }
+    }
+
+    /// <summary>stderr 한 줄을 타임스탬프와 함께 로그 파일에 덧붙입니다.</summary>
+    private void AppendStdErrLog(string Line)
+    {
+        if (StdErrLogPath is null)
+            return;
+
+        try { File.AppendAllText(StdErrLogPath, $"[{DateTime.Now:HH:mm:ss}] {Line}{Environment.NewLine}"); }
+        catch { /* 무시 */ }
     }
 
     // ── 정리 ──

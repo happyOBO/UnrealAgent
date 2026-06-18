@@ -52,4 +52,10 @@ public abstract record ClaudeStreamItem
 
     /// <summary>실행/파싱 실패입니다 (CLI 미발견, 프로세스 오류 등).</summary>
     public sealed record Failure(string Message) : ClaudeStreamItem;
+
+    /// <summary>
+    /// 턴을 끝내지 않는 정보성 알림입니다 (레이트리밋/지연 등).
+    /// AgentLoop가 <c>ChatEvent.System</c>으로 표면화해 사용자가 "왜 멈춘 듯한가"를 알 수 있게 합니다.
+    /// </summary>
+    public sealed record Notice(string Message) : ClaudeStreamItem;
 }

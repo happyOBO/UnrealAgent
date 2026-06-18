@@ -2,7 +2,18 @@
 #include "IPythonScriptPlugin.h"
 #include "PythonScriptTypes.h"
 #include "Editor.h"
+#include "HAL/PlatformTime.h"
 #include UE_INLINE_GENERATED_CPP_BY_NAME(ExecutePythonTool)
+
+DEFINE_LOG_CATEGORY_STATIC(ExecutePythonLog, Log, All);
+
+namespace
+{
+	// 게임 스레드를 이만큼(초) 점유하면 경고를 남깁니다. 동기 Python은 게임 스레드를
+	// 막으므로, 오래 걸리는 스크립트는 에디터를 얼릴 수 있습니다(예: ScopedSlowTask 0% 멈춤).
+	// 추후 멈춤을 진단할 수 있도록 실행 시간을 기록합니다.
+	constexpr double GameThreadStallWarnSeconds = 5.0;
+}
 
 FMcpResponse FExecutePythonTool::Execute()
 {
@@ -26,8 +37,20 @@ FMcpResponse FExecutePythonTool::Execute()
 	Cmd.Command = Code;
 	Cmd.ExecutionMode = EPythonCommandExecutionMode::ExecuteFile;
 
-	// PythonScriptPlugin을 통해 코드를 실행합니다
-	if (Python->ExecPythonCommandEx(Cmd)) 
+	// PythonScriptPlugin을 통해 코드를 실행합니다 (게임 스레드 동기 실행)
+	const double StartSeconds = FPlatformTime::Seconds();
+	const bool bOk = Python->ExecPythonCommandEx(Cmd);
+	const double ElapsedSeconds = FPlatformTime::Seconds() - StartSeconds;
+
+	// 오래 걸린 스크립트는 게임 스레드를 막아 에디터를 얼릴 수 있으므로 경고로 남깁니다.
+	if (ElapsedSeconds >= GameThreadStallWarnSeconds)
+	{
+		UE_LOG(ExecutePythonLog, Warning,
+			TEXT("execute_python이 게임 스레드를 %.1f초 점유했습니다 (purpose: %s). 에디터 멈춤의 원인일 수 있습니다."),
+			ElapsedSeconds, *Purpose);
+	}
+
+	if (bOk)
 	{
 		GEditor->EndTransaction();
 		return FMcpResponse::Success(ExtractOutput(Cmd.LogOutput));
@@ -35,7 +58,7 @@ FMcpResponse FExecutePythonTool::Execute()
 
 	// 실행 실패 시 트랜잭션을 취소하여 에디터 상태를 복원합니다
 	GEditor->CancelTransaction(TxIndex);
-	
+
 	return FMcpResponse::Failure(Cmd.CommandResult);
 }
 

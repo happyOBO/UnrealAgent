@@ -61,6 +61,12 @@ public static class CliArgsBuilder
             Args.Add(Options.ResumeSessionId);
         }
 
+        // 심층 디버깅(옵트인): 환경변수 UNREALAGENT_CLI_DEBUG가 설정되면 CLI --debug를 켭니다.
+        // 디버그 출력은 stderr로 가며 stderr는 파일로 기록되므로, stall 원인 추적에 사용합니다.
+        // 기본값(미설정)에서는 동작이 바뀌지 않아 회귀 위험이 없습니다.
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("UNREALAGENT_CLI_DEBUG")))
+            Args.Add("--debug");
+
         return Args;
     }
 

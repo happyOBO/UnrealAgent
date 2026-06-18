@@ -128,6 +128,11 @@ public sealed class AgentLoop(
                     yield return new ChatEvent.Done();
                     yield break;
 
+                case ClaudeStreamItem.Notice Notice:
+                    // 턴을 끝내지 않는 정보성 알림 (레이트리밋/지연 등) — System으로 표면화만 합니다.
+                    yield return new ChatEvent.System(Notice.Message);
+                    break;
+
                 case ClaudeStreamItem.Failure Failure:
                     yield return new ChatEvent.System(Failure.Message);
                     yield return new ChatEvent.Done();

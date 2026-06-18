@@ -69,4 +69,15 @@ skeleton = anim_seq.get_editor_property('target_skeleton')
 
 - 애님 BP 로직(상태 전이, 블렌드)이 필요하면 Python 한계를 명확히 알리고, 데이터 자산 준비까지만 자동화한다.
 - 노티파이/커브 작업 후 `save_asset` 필수.
-- API 시그니처가 불확실하면 `dir(unreal.AnimationLibrary)` / `help(...)`로 먼저 확인.
+
+## Python으로 불가능한 것 — 추정/brute-force 금지
+
+아래는 Python `unreal` API에 **존재하지 않는다**. 비슷한 이름을 루프로 추정하지 말 것(에디터를 얼리고 시간만 낭비한다). 필요하면 한계를 사용자에게 보고한다:
+- `unreal.SkeletalMeshLibrary`, `unreal.AnimationBlueprintLibrary` — **모듈 자체가 없다.**
+- 스켈레톤/스켈레탈 메시의 레퍼런스 스켈레톤·본 인덱스 조회: `reference_skeleton` / `ref_skeleton` 프로퍼티, `find_bone_index()` 메서드 — **없다.** 본 목록을 Python으로 열거하려 하지 말 것.
+- 애님 BP의 프리뷰 메시(`preview_skeletal_mesh`) — `AnimBlueprint`에 해당 프로퍼티 **없다**(에디터 전용 설정이며 기능에 영향 없음).
+
+대안:
+- **본 이름은 사용자/요청에서 받은 값을 그대로** `anim_blueprint_modify`의 `add_layered_blend_per_bone`(`bones`)에 넘긴다. Python으로 검증/열거하려 하지 말 것.
+- 스켈레톤 참조가 필요하면 자산의 문서화된 프로퍼티만 사용: `anim_seq.get_editor_property('target_skeleton')`, `skeletal_mesh.skeleton`.
+- 문서에 없는 API는 `dir()`/`help()`로 장시간 탐색하지 말고, 한계를 보고하고 전용 도구(`anim_blueprint_modify` / `montage_modify`)로 가능한 범위까지만 진행한다.
