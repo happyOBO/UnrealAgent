@@ -40,7 +40,7 @@ struct FBlueprintModifyTool : public FMcpTool
 	// ── add_node ──
 
 	UPROPERTY(meta=(ToolParam="node_type",
-		Description="[add_node] CallFunction | Event | VariableGet | VariableSet | Branch | Sequence | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate"))
+		Description="[add_node] CallFunction | Event | OverrideEvent | VariableGet | VariableSet | Branch | Sequence | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate | SwitchEnum | CreateWidget | MacroInstance | ForLoop | ForEachLoop | WhileLoop"))
 	FString NodeType;
 
 	UPROPERTY(meta=(ToolParam="function",
@@ -52,8 +52,16 @@ struct FBlueprintModifyTool : public FMcpTool
 	FString TargetClass;
 
 	UPROPERTY(meta=(ToolParam="event",
-		Description="[add_node Event] Event name: BeginPlay | Tick | EndPlay | <ParentFunction>. [add_node CustomEvent] The custom event name to create"))
+		Description="[add_node Event] Event name: BeginPlay | Tick | EndPlay | <ParentFunction>. [add_node CustomEvent] The custom event name to create. [add_node OverrideEvent] Parent function/event to override, e.g. OnMouseButtonDown, OnDragDetected, OnDrop"))
 	FString Event;
+
+	UPROPERTY(meta=(ToolParam="enum",
+		Description="[add_node SwitchEnum] Enum type name to switch on, e.g. EWeaponSlot"))
+	FString Enum;
+
+	UPROPERTY(meta=(ToolParam="macro",
+		Description="[add_node MacroInstance] Standard macro name: ForLoop|ForLoopWithBreak|ForEachLoop|ForEachLoopWithBreak|WhileLoop|DoOnce|DoN|Gate|FlipFlop|MultiGate|IsValid. (Or pass the macro name directly as node_type.)"))
+	FString Macro;
 
 	UPROPERTY(meta=(ToolParam="variable",
 		Description="[add_node VariableGet/VariableSet] Blueprint variable name"))
@@ -138,12 +146,16 @@ struct FBlueprintModifyTool : public FMcpTool
 	FString ParamName;
 
 	UPROPERTY(meta=(ToolParam="param_type",
-		Description="[add_function_param] Type: bool | int | int64 | float | double | string | name | text | <ClassName> | <StructName>"))
+		Description="[add_function_param] Type: bool | int | int64 | float | double | string | name | text | <ClassName> | <StructName> | <EnumName>. Structs accept an F-prefix (FVector2D) or reflected name (Vector2D)."))
 	FString ParamType;
 
 	UPROPERTY(meta=(ToolParam="direction",
-		Description="[add_function_param] 'input' (FunctionEntry) or 'output' (FunctionResult). Default input."))
+		Description="[add_function_param] 'input' (FunctionEntry) or 'output' (FunctionResult). Default input. Ignored when custom_event is set (custom events take inputs only)."))
 	FString Direction;
+
+	UPROPERTY(meta=(ToolParam="custom_event",
+		Description="[add_function_param] If set, add the parameter to the named CustomEvent node (in the event graph) instead of a function graph. e.g. custom_event=SetItem, param_name=Item, param_type=ItemInstance"))
+	FString CustomEvent;
 
 	virtual FString ToolDescription() const override;
 	virtual FMcpResponse Execute() override;

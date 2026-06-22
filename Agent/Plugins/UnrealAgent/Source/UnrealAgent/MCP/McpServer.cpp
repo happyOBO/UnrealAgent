@@ -181,8 +181,27 @@ bool UMcpServer::HandleMcpRequest(const FHttpServerRequest& Request, const FHttp
 		return true;
 	}
 
-	// JSON-RPC 2.0 필드를 추출합니다
-	const int32 RequestId = static_cast<int32>(JsonObject->GetNumberField(TEXT("id")));
+	// JSON-RPC 2.0 notification(id 없음) 처리:
+	// MCP 핸드셰이크의 notifications/initialized 등은 id가 없으며, 스펙상 응답 본문이 없어야 합니다.
+	// id를 무조건 숫자로 읽으면 notification에서 LogJson 경고("Field id was not found")가 발생하고,
+	// 에러 응답을 돌려주면 CLI MCP 클라이언트의 Streamable-HTTP 핸드셰이크가 깨져 무한 대기에 빠집니다.
+	// 따라서 id가 없으면 라우팅하지 않고 본문 없는 202 Accepted만 반환합니다.
+	const bool bHasId = JsonObject->HasTypedField<EJson::Number>(TEXT("id"))
+		|| JsonObject->HasTypedField<EJson::String>(TEXT("id"));
+
+	if (!bHasId)
+	{
+		TUniquePtr<FHttpServerResponse> Accepted = FHttpServerResponse::Create(FString(), TEXT("application/json"));
+		Accepted->Code = EHttpServerResponseCodes::Accepted;
+		OnComplete(MoveTemp(Accepted));
+
+		return true;
+	}
+
+	// JSON-RPC 2.0 필드를 추출합니다 (id는 숫자일 때만 읽어 불필요한 경고를 피합니다)
+	const int32 RequestId = JsonObject->HasTypedField<EJson::Number>(TEXT("id"))
+		? static_cast<int32>(JsonObject->GetNumberField(TEXT("id")))
+		: 0;
 	const FString Method = JsonObject->GetStringField(TEXT("method"));
 
 	// 메서드별로 라우팅합니다

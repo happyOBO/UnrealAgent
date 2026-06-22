@@ -21,7 +21,11 @@ keywords:
   - level actor
 ---
 
-UE5에서는 **에디터 서브시스템**을 우선 사용한다. `EditorLevelLibrary`는 deprecated이며 가급적 피한다.
+**액터 스폰/이동/삭제/속성설정과 레벨 액터 조회는 네이티브 도구를 우선 사용한다** — 구조화된 결과를 반환하고 Python 우회보다 안정적이다:
+- `actor_modify` (operation: `spawn`/`move`/`delete`/`set_property`)
+- `get_level_actors` (클래스/이름 필터 + 페이지네이션; 큰 레벨에서 전부 print하는 footgun 방지)
+
+네이티브 도구로 안 되는 세밀한 작업(특수 스폰 파라미터, 일괄 처리 로직 등)만 아래 Python으로 한다. UE5에서는 **에디터 서브시스템**을 우선 사용한다. `EditorLevelLibrary`는 deprecated이며 가급적 피한다.
 
 ```python
 import unreal

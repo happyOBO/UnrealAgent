@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using UnrealAgent.Backend.Conversation;
 
 namespace UnrealAgent.Backend.ClaudeCode;
@@ -64,34 +65,93 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
             catch { /* 종료 시 무시 */ }
         }, Ct);
 
+        // stdout도 백그라운드로 흡수하여 채널에 적재합니다. 이 drain은 stdin 쓰기보다 먼저 시작해야 합니다.
+        // CLI는 initialize 수신 즉시 stdout으로 응답(system/init 등)을 쏟아내는데, 읽는 쪽이 없으면
+        // OS 파이프 버퍼가 차서 CLI가 stdout write에 블록되고, 그 결과 stdin도 읽지 못해
+        // 우리 쪽 user message 쓰기와 서로를 기다리는 교착(deadlock)에 빠진다. 동시 drain으로 이를 차단한다.
+        Channel<string> StdoutChannel = Channel.CreateUnbounded<string>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                string? Line;
+                while ((Line = await Proc.StandardOutput.ReadLineAsync(Ct)) != null)
+                    await StdoutChannel.Writer.WriteAsync(Line, Ct);
+
+                StdoutChannel.Writer.TryComplete();
+            }
+            catch (Exception e)
+            {
+                // 취소/프로세스 종료 등은 완료 신호로 매핑합니다. 메인 루프가 EOF로 처리합니다.
+                StdoutChannel.Writer.TryComplete(e);
+            }
+        }, Ct);
+
         // 3) 핸드셰이크 + 사용자 메시지 전송 (stdin은 턴 종료까지 열어둠)
+        //    stdout이 위에서 이미 동시 drain 중이므로 큰 입력/출력에도 교착이 발생하지 않는다.
         await WriteLineAsync(ControlProtocol.BuildInitialize(), Ct);
         await WriteLineAsync(ControlProtocol.BuildUserMessage(Input), Ct);
 
-        // 4) stdout NDJSON 읽기 루프
-        StreamReader Out = Proc.StandardOutput;
+        // 4) stdout NDJSON 읽기 루프 (채널 소비)
+        ChannelReader<string> Reader = StdoutChannel.Reader;
         bool Done = false;
+
+        // 유휴 타임아웃(stall) 워치독: CLI가 무출력으로 멈추면(MCP 핸드셰이크/모델 응답 지연 등)
+        // 무한 대기 대신 진단 메시지로 표면화하고 턴을 끝냅니다.
+        TimeSpan IdleTimeout = ResolveIdleTimeout();
 
         while (!Done)
         {
-            string? Line;
-            try
+            string? Line = null;
+            bool bStalled = false;
+            bool bCancelled = false;
+            bool bEof = false;
+
+            using (CancellationTokenSource TimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(Ct))
             {
-                Line = await Out.ReadLineAsync(Ct);
+                TimeoutCts.CancelAfter(IdleTimeout);
+                try
+                {
+                    // 채널에 다음 줄이 들어올 때까지 대기합니다. false면 stdout EOF(채널 완료)입니다.
+                    if (await Reader.WaitToReadAsync(TimeoutCts.Token))
+                        Reader.TryRead(out Line);
+                    else
+                        bEof = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    // 외부 취소(Stop/Esc/앱 종료)면 조용히 종료, 그 외엔 유휴 타임아웃(stall)으로 간주합니다.
+                    if (Ct.IsCancellationRequested)
+                        bCancelled = true;
+                    else
+                        bStalled = true;
+                }
+                catch (ChannelClosedException)
+                {
+                    // stdout drain Task가 예외로 채널을 완료한 경우(프로세스 종료 등) — EOF로 처리합니다.
+                    bEof = true;
+                }
             }
-            catch (OperationCanceledException)
+
+            if (bCancelled)
+                yield break;
+
+            if (bStalled)
             {
+                yield return BuildStallFailure(IdleTimeout);
                 yield break;
             }
 
             // EOF: 프로세스가 result 없이 종료됨
-            if (Line is null)
+            if (bEof)
             {
                 yield return BuildEofFailure();
                 yield break;
             }
 
-            if (Line.Length == 0)
+            if (Line is null || Line.Length == 0)
                 continue;
 
             // 한 줄을 파싱하여 0~N개의 아이템으로 변환
@@ -426,6 +486,32 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
         return new ClaudeStreamItem.Failure(string.IsNullOrEmpty(Err)
             ? $"claude 프로세스가 응답 없이 종료되었습니다.{PathHint}"
             : $"claude 오류: {Err}{PathHint}");
+    }
+
+    /// <summary>유휴 타임아웃(stall)에 도달했을 때 진단 정보를 담은 실패 아이템을 만듭니다.</summary>
+    private ClaudeStreamItem.Failure BuildStallFailure(TimeSpan IdleTimeout)
+    {
+        string Err;
+        lock (StdErr) Err = StdErr.ToString().Trim();
+
+        string PathHint = StdErrLogPath is null ? "" : $" (자세한 로그: {StdErrLogPath})";
+        string Detail = string.IsNullOrEmpty(Err) ? "" : $"\n최근 stderr: {Err}";
+
+        return new ClaudeStreamItem.Failure(
+            $"claude 응답이 {(int)IdleTimeout.TotalSeconds}초 동안 멈춰 턴을 중단했습니다. " +
+            $"MCP 서버 연결 또는 모델 응답이 지연되었을 수 있습니다.{PathHint}{Detail}");
+    }
+
+    /// <summary>stdout 무출력 유휴 타임아웃을 결정합니다. UNREALAGENT_CLI_IDLE_TIMEOUT_SEC로 조정 가능합니다.</summary>
+    private static TimeSpan ResolveIdleTimeout()
+    {
+        const int DefaultSeconds = 180;
+
+        string? Raw = Environment.GetEnvironmentVariable("UNREALAGENT_CLI_IDLE_TIMEOUT_SEC");
+        if (int.TryParse(Raw, out int Seconds) && Seconds > 0)
+            return TimeSpan.FromSeconds(Seconds);
+
+        return TimeSpan.FromSeconds(DefaultSeconds);
     }
 
     // ── stderr 실시간 로깅 ──

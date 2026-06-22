@@ -16,7 +16,7 @@ public sealed class ContextRegistry
     private readonly List<ContextDocument> Contexts = [];
 
     /// <summary>한 번에 주입할 최대 도메인 수입니다 (토큰 예산 보호).</summary>
-    private const int MaxInjectedDomains = 2;
+    private const int MaxInjectedDomains = 3;
 
     /// <summary>
     /// 컨텍스트 디렉토리를 스캔하여 .md 문서를 로딩합니다. 시작 시 1회 호출합니다.

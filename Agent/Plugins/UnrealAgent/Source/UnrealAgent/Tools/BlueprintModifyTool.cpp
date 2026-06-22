@@ -13,14 +13,22 @@ FString FBlueprintModifyTool::ToolDescription() const
 		"All parameters are flat (no nested objects). Fill only the fields an operation needs:\n"
 		"\n"
 		"- add_node: node_type + node fields, [pos_x], [pos_y], [graph_name], [is_function_graph]\n"
-		"    node_type = CallFunction | Event | VariableGet | VariableSet | Branch | Sequence\n"
+		"    node_type = CallFunction | Event | OverrideEvent | VariableGet | VariableSet | Branch | Sequence\n"
 		"              | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate\n"
+		"              | SwitchEnum | CreateWidget | MacroInstance | ForLoop | ForEachLoop | WhileLoop\n"
 		"    CallFunction: function, [target_class] (KismetSystemLibrary|KismetMathLibrary|GameplayStatics|<Class>)\n"
 		"    Event: event (BeginPlay|Tick|EndPlay|<ParentFunc>)\n"
+		"    OverrideEvent: event (parent function/event to override, e.g. OnMouseButtonDown, OnDragDetected, OnDrop, OnMouseEnter).\n"
+		"        Events with a return/out value (OnMouseButtonDown→FEventReply, OnDrop→bool, OnDragDetected→out Operation)\n"
+		"        create a function-override graph; the returned node_id is the FunctionEntry there. Reference its body via\n"
+		"        graph_name=<EventName> is_function_graph=true. Events without a return (OnMouseEnter/Leave) place a red event node.\n"
 		"    VariableGet/VariableSet: variable\n"
 		"    Sequence: [num_outputs]\n"
 		"    Cast: target_class (class to cast to, e.g. PlayerController)\n"
-		"    CustomEvent: event (the new custom event name)\n"
+		"    CustomEvent: event (the new custom event name). Add its params with add_function_param custom_event=<name>.\n"
+		"    SwitchEnum: enum (enum type to switch on, e.g. EWeaponSlot) — replaces the manual 'Switch on Enum' node.\n"
+		"    CreateWidget: target_class (UserWidget class to construct). Wire its Class/return pins via connect_pins.\n"
+		"    MacroInstance: macro (ForLoop|ForEachLoop|WhileLoop|DoOnce|Gate|...). Shortcut: pass the macro name directly as node_type.\n"
 		"    FunctionResult: (function graph only; pairs with add_function_param output)\n"
 		"    ComponentBoundEvent: component + delegate_property (e.g. component=BtnOk, delegate_property=OnClicked) — ideal for UMG button clicks\n"
 		"    AddDelegate/RemoveDelegate: delegate_property, [delegate_owner] (empty = self). Connect the target object + event via connect_pins.\n"
@@ -34,9 +42,11 @@ FString FBlueprintModifyTool::ToolDescription() const
 		"- add_component: component_type (e.g. StaticMeshComponent), [component_name], [static_mesh asset path]\n"
 		"    Adds a component to the Blueprint's component hierarchy. Use this instead of Python\n"
 		"    SubobjectDataSubsystem for components. For a static mesh, pass static_mesh to set it in one call.\n"
-		"- add_function_param: param_name, param_type, [direction=input|output], [graph_name] (forces function graph)\n"
+		"- add_function_param: param_name, param_type, [direction=input|output], [graph_name] (forces function graph), [custom_event]\n"
 		"    Adds an input (FunctionEntry) or output/return (FunctionResult) parameter to a function graph.\n"
-		"    param_type = bool|int|int64|float|double|string|name|text|<ClassName>|<StructName>\n"
+		"    With custom_event=<name>, adds an input param to that CustomEvent node in the event graph instead.\n"
+		"    param_type = bool|int|int64|float|double|string|name|text|<ClassName>|<StructName>|<EnumName>\n"
+		"        (structs accept FVector2D or Vector2D; enums by name, e.g. EWeaponSlot)\n"
 		"- connect_pins: source_node, source_pin, target_node, target_pin (empty pin name = exec pin auto)\n"
 		"- disconnect_pins: source_node, source_pin, target_node, target_pin\n"
 		"- set_pin_value: node_id, pin, value\n"
@@ -82,6 +92,19 @@ FMcpResponse FBlueprintModifyTool::Execute()
 			return FMcpResponse::Failure(TEXT("add_function_param requires 'param_name'"));
 		if (ParamType.IsEmpty())
 			return FMcpResponse::Failure(TEXT("add_function_param requires 'param_type'"));
+
+		// custom_event 지정 시: 함수 그래프가 아닌 CustomEvent 노드의 입력 파라미터를 추가.
+		if (!CustomEvent.IsEmpty())
+		{
+			if (!FBlueprintGraphEditor::AddCustomEventParam(Blueprint, CustomEvent, ParamName, ParamType, Error))
+				return FMcpResponse::Failure(Error);
+
+			bool bOkCE = false;
+			const FString MsgCE = FBlueprintGraphEditor::CompileAndSave(Blueprint, bOkCE);
+			const FString OutCE = FString::Printf(TEXT("Added input param '%s' (%s) to CustomEvent '%s'.\n"),
+				*ParamName, *ParamType, *CustomEvent) + MsgCE;
+			return bOkCE ? FMcpResponse::Success(OutCE) : FMcpResponse::Failure(OutCE);
+		}
 
 		UEdGraph* FuncGraph = FBlueprintGraphEditor::FindGraph(Blueprint, GraphName, /*bFunctionGraph*/true, Error);
 		if (!FuncGraph)
@@ -129,6 +152,8 @@ FMcpResponse FBlueprintModifyTool::Execute()
 		if (!DelegateProperty.IsEmpty())  NodeParams->SetStringField(TEXT("delegate_property"), DelegateProperty);
 		if (!DelegateOwner.IsEmpty())     NodeParams->SetStringField(TEXT("delegate_owner"), DelegateOwner);
 		if (!BoundFunction.IsEmpty())     NodeParams->SetStringField(TEXT("bound_function"), BoundFunction);
+		if (!Enum.IsEmpty())              NodeParams->SetStringField(TEXT("enum"), Enum);
+		if (!Macro.IsEmpty())             NodeParams->SetStringField(TEXT("macro"), Macro);
 
 		FString OutNodeId;
 		UEdGraphNode* Node = FBlueprintGraphEditor::CreateNode(Graph, Blueprint, NodeType, NodeParams, PosX, PosY, OutNodeId, Error);

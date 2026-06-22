@@ -21,6 +21,9 @@
 #include "K2Node_RemoveDelegate.h"
 #include "K2Node_CreateDelegate.h"
 #include "K2Node_EditablePinBase.h"
+#include "K2Node_SwitchEnum.h"
+#include "K2Node_MacroInstance.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
@@ -165,6 +168,38 @@ UEdGraphNode* FBlueprintGraphEditor::CreateNode(UEdGraph* Graph, UBlueprint* Blu
 		Params->TryGetStringField(TEXT("event"), EventName);
 		NewNode = CreateCustomEventNode(Graph, EventName, PosX, PosY, OutError);
 	}
+	else if (NodeType.Equals(TEXT("OverrideEvent"), ESearchCase::IgnoreCase)
+		|| NodeType.Equals(TEXT("OverrideFunction"), ESearchCase::IgnoreCase)
+		|| NodeType.Equals(TEXT("Override"), ESearchCase::IgnoreCase))
+	{
+		FString EventName;
+		Params->TryGetStringField(TEXT("event"), EventName);
+		NewNode = CreateOverrideEventNode(Graph, Blueprint, EventName, PosX, PosY, OutError);
+	}
+	else if (NodeType.Equals(TEXT("SwitchEnum"), ESearchCase::IgnoreCase)
+		|| NodeType.Equals(TEXT("SwitchOnEnum"), ESearchCase::IgnoreCase))
+	{
+		FString EnumName;
+		Params->TryGetStringField(TEXT("enum"), EnumName);
+		NewNode = CreateSwitchEnumNode(Graph, EnumName, PosX, PosY, OutError);
+	}
+	else if (NodeType.Equals(TEXT("CreateWidget"), ESearchCase::IgnoreCase))
+	{
+		FString WidgetClass;
+		Params->TryGetStringField(TEXT("target_class"), WidgetClass);
+		NewNode = CreateWidgetNode(Graph, WidgetClass, PosX, PosY, OutError);
+	}
+	else if (NodeType.Equals(TEXT("MacroInstance"), ESearchCase::IgnoreCase))
+	{
+		FString MacroName;
+		Params->TryGetStringField(TEXT("macro"), MacroName);
+		NewNode = CreateMacroInstanceNode(Graph, MacroName, PosX, PosY, OutError);
+	}
+	else if (IsStandardMacroNodeType(NodeType))
+	{
+		// ForLoop / ForEachLoop / WhileLoop 등은 노드 타입 이름을 매크로 이름으로 직접 사용.
+		NewNode = CreateMacroInstanceNode(Graph, NodeType, PosX, PosY, OutError);
+	}
 	else if (NodeType.Equals(TEXT("FunctionResult"), ESearchCase::IgnoreCase) || NodeType.Equals(TEXT("Return"), ESearchCase::IgnoreCase))
 	{
 		NewNode = CreateFunctionResultNode(Graph, PosX, PosY, OutError);
@@ -188,7 +223,7 @@ UEdGraphNode* FBlueprintGraphEditor::CreateNode(UEdGraph* Graph, UBlueprint* Blu
 	}
 	else
 	{
-		OutError = FString::Printf(TEXT("Unknown node_type '%s'. Supported: CallFunction, Event, VariableGet, VariableSet, Branch, Sequence, Cast, CustomEvent, FunctionResult, ComponentBoundEvent, AddDelegate, RemoveDelegate, CreateDelegate"), *NodeType);
+		OutError = FString::Printf(TEXT("Unknown node_type '%s'. Supported: CallFunction, Event, OverrideEvent, VariableGet, VariableSet, Branch, Sequence, Cast, CustomEvent, FunctionResult, ComponentBoundEvent, AddDelegate, RemoveDelegate, CreateDelegate, SwitchEnum, CreateWidget, MacroInstance, ForLoop, ForEachLoop, WhileLoop"), *NodeType);
 		return nullptr;
 	}
 
@@ -298,10 +333,21 @@ UEdGraphNode* FBlueprintGraphEditor::CreateVariableNode(UEdGraph* Graph, UBluepr
 		{
 			if (Var.VarName == VarName) { bFound = true; break; }
 		}
+		// NewVariables(사용자 선언 변수)에 없으면 컴파일된 클래스 프로퍼티에서 탐색.
+		// UMG 위젯 트리 변수(bIsVariable인 ItemIcon 등), 상속 변수, 컴포넌트가 여기에 해당한다.
+		// 위젯은 NewVariables가 아니라 (Skeleton)GeneratedClass의 FObjectProperty로 존재.
+		if (!bFound)
+		{
+			UClass* VarClass = Blueprint->SkeletonGeneratedClass
+				? Blueprint->SkeletonGeneratedClass.Get()
+				: Blueprint->GeneratedClass.Get();
+			if (VarClass && FindFProperty<FProperty>(VarClass, VarName))
+				bFound = true;
+		}
 	}
 	if (!bFound)
 	{
-		OutError = FString::Printf(TEXT("Variable '%s' not found in Blueprint"), *VariableName);
+		OutError = FString::Printf(TEXT("Variable '%s' not found in Blueprint (checked user variables + widget/inherited members). For a UMG widget, enable 'Is Variable' on it first."), *VariableName);
 		return nullptr;
 	}
 
@@ -573,6 +619,171 @@ UEdGraphNode* FBlueprintGraphEditor::CreateDelegateNode(UEdGraph* Graph, UBluepr
 	return RemoveNode;
 }
 
+UEdGraphNode* FBlueprintGraphEditor::CreateSwitchEnumNode(UEdGraph* Graph, const FString& EnumName, int32 PosX, int32 PosY, FString& OutError)
+{
+	UEnum* Enum = ResolveEnum(EnumName);
+	if (!Enum)
+	{
+		OutError = FString::Printf(TEXT("SwitchEnum requires a valid 'enum'. '%s' not found."), *EnumName);
+		return nullptr;
+	}
+
+	FGraphNodeCreator<UK2Node_SwitchEnum> NodeCreator(*Graph);
+	UK2Node_SwitchEnum* SwitchNode = NodeCreator.CreateNode();
+	SwitchNode->SetEnum(Enum);
+	SwitchNode->NodePosX = PosX;
+	SwitchNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+	return SwitchNode;
+}
+
+bool FBlueprintGraphEditor::IsStandardMacroNodeType(const FString& NodeType)
+{
+	static const TCHAR* KnownMacros[] = {
+		TEXT("ForLoop"), TEXT("ForLoopWithBreak"), TEXT("ForEachLoop"), TEXT("ForEachLoopWithBreak"),
+		TEXT("WhileLoop"), TEXT("DoOnce"), TEXT("DoN"), TEXT("Gate"), TEXT("FlipFlop"), TEXT("MultiGate"), TEXT("IsValid")
+	};
+	for (const TCHAR* Name : KnownMacros)
+	{
+		if (NodeType.Equals(Name, ESearchCase::IgnoreCase))
+			return true;
+	}
+	return false;
+}
+
+UEdGraph* FBlueprintGraphEditor::FindStandardMacroGraph(const FString& MacroName)
+{
+	if (MacroName.IsEmpty())
+		return nullptr;
+
+	UBlueprint* MacroBP = LoadObject<UBlueprint>(nullptr, TEXT("/Engine/EditorBlueprintResources/StandardMacros.StandardMacros"));
+	if (!MacroBP)
+		return nullptr;
+
+	for (UEdGraph* MacroGraph : MacroBP->MacroGraphs)
+	{
+		if (MacroGraph && MacroGraph->GetName().Equals(MacroName, ESearchCase::IgnoreCase))
+			return MacroGraph;
+	}
+	return nullptr;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateMacroInstanceNode(UEdGraph* Graph, const FString& MacroName, int32 PosX, int32 PosY, FString& OutError)
+{
+	UEdGraph* MacroGraph = FindStandardMacroGraph(MacroName);
+	if (!MacroGraph)
+	{
+		OutError = FString::Printf(TEXT("Standard macro '%s' not found (try ForLoop|ForLoopWithBreak|ForEachLoop|ForEachLoopWithBreak|WhileLoop|DoOnce|DoN|Gate|FlipFlop|MultiGate|IsValid)"), *MacroName);
+		return nullptr;
+	}
+
+	FGraphNodeCreator<UK2Node_MacroInstance> NodeCreator(*Graph);
+	UK2Node_MacroInstance* MacroNode = NodeCreator.CreateNode();
+	MacroNode->SetMacroGraph(MacroGraph);
+	MacroNode->NodePosX = PosX;
+	MacroNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+	return MacroNode;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateWidgetNode(UEdGraph* Graph, const FString& WidgetClassName, int32 PosX, int32 PosY, FString& OutError)
+{
+	// UK2Node_CreateWidget은 UMGEditor의 Private 헤더라 모듈 외부에서 include할 수 없습니다.
+	// 동등한 공개 API인 UWidgetBlueprintLibrary::Create를 CallFunction 노드로 배치합니다.
+	// (WidgetType 핀이 DeterminesOutputType이라 클래스를 지정하면 반환 타입이 위젯 클래스로 좁혀집니다.)
+	UFunction* CreateFunc = UWidgetBlueprintLibrary::StaticClass()->FindFunctionByName(FName(TEXT("Create")));
+	if (!CreateFunc)
+	{
+		OutError = TEXT("UWidgetBlueprintLibrary::Create not found");
+		return nullptr;
+	}
+
+	FGraphNodeCreator<UK2Node_CallFunction> NodeCreator(*Graph);
+	UK2Node_CallFunction* WidgetNode = NodeCreator.CreateNode();
+	WidgetNode->SetFromFunction(CreateFunc);
+	WidgetNode->NodePosX = PosX;
+	WidgetNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+
+	// 위젯 클래스 지정(옵션): WidgetType 입력 핀 기본값을 설정하면 반환 타입이 갱신됩니다.
+	if (!WidgetClassName.IsEmpty())
+	{
+		UClass* WidgetClass = ResolveClass(WidgetClassName);
+		if (!WidgetClass)
+		{
+			OutError = FString::Printf(TEXT("CreateWidget target_class '%s' not found"), *WidgetClassName);
+			return nullptr;
+		}
+		if (UEdGraphPin* ClassPin = WidgetNode->FindPin(TEXT("WidgetType")))
+		{
+			ClassPin->DefaultObject = WidgetClass;
+			WidgetNode->PinDefaultValueChanged(ClassPin);
+		}
+	}
+	return WidgetNode;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateOverrideEventNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& EventName, int32 PosX, int32 PosY, FString& OutError)
+{
+	if (EventName.IsEmpty())
+	{
+		OutError = TEXT("OverrideEvent requires 'event' (the parent function/event name, e.g. OnMouseButtonDown)");
+		return nullptr;
+	}
+	if (!Blueprint || !Blueprint->ParentClass)
+	{
+		OutError = TEXT("Blueprint has no parent class");
+		return nullptr;
+	}
+
+	UFunction* OverrideFunc = Blueprint->ParentClass->FindFunctionByName(FName(*EventName));
+	if (!OverrideFunc)
+	{
+		OutError = FString::Printf(TEXT("Overridable function/event '%s' not found on parent class '%s'"), *EventName, *Blueprint->ParentClass->GetName());
+		return nullptr;
+	}
+	if (!UEdGraphSchema_K2::CanKismetOverrideFunction(OverrideFunc))
+	{
+		OutError = FString::Printf(TEXT("Function '%s' cannot be overridden in Blueprint"), *EventName);
+		return nullptr;
+	}
+
+	// 반환값/출력 인자가 없으면 이벤트 그래프에 빨간 이벤트 노드로 배치 가능.
+	if (UEdGraphSchema_K2::FunctionCanBePlacedAsEvent(OverrideFunc))
+	{
+		FGraphNodeCreator<UK2Node_Event> NodeCreator(*Graph);
+		UK2Node_Event* EventNode = NodeCreator.CreateNode();
+		EventNode->EventReference.SetFromField<UFunction>(OverrideFunc, false);
+		EventNode->bOverrideFunction = true;
+		EventNode->NodePosX = PosX;
+		EventNode->NodePosY = PosY;
+		NodeCreator.Finalize();
+		return EventNode;
+	}
+
+	// 반환/출력값이 있어 이벤트로 배치 불가 → 함수 오버라이드 그래프를 생성하고 진입 노드를 반환.
+	const FName FuncFName(*EventName);
+	for (UEdGraph* FG : Blueprint->FunctionGraphs)
+	{
+		if (FG && FG->GetFName() == FuncFName)
+		{
+			for (UEdGraphNode* N : FG->Nodes)
+				if (UK2Node_FunctionEntry* Entry = Cast<UK2Node_FunctionEntry>(N))
+					return Entry;
+		}
+	}
+
+	UEdGraph* NewGraph = FBlueprintEditorUtils::CreateNewGraph(Blueprint, FuncFName, UEdGraph::StaticClass(), UEdGraphSchema_K2::StaticClass());
+	FBlueprintEditorUtils::AddFunctionGraph<UClass>(Blueprint, NewGraph, /*bIsUserCreated*/false, OverrideFunc->GetOwnerClass());
+
+	for (UEdGraphNode* N : NewGraph->Nodes)
+		if (UK2Node_FunctionEntry* Entry = Cast<UK2Node_FunctionEntry>(N))
+			return Entry;
+
+	OutError = TEXT("Override function graph created but no entry node found");
+	return nullptr;
+}
+
 //-----------------------------------------------------------------------------
 // 함수 시그니처 편집
 //-----------------------------------------------------------------------------
@@ -621,24 +832,59 @@ bool FBlueprintGraphEditor::MakePinType(const FString& TypeStr, FEdGraphPinType&
 	}
 	else
 	{
-		// 클래스(object) 또는 스트럭트로 해석 시도.
+		// 클래스(object) → 스트럭트 → enum 순으로 해석 시도.
 		if (UClass* AsClass = ResolveClass(T))
 		{
 			OutPinType.PinCategory = UEdGraphSchema_K2::PC_Object;
 			OutPinType.PinSubCategoryObject = AsClass;
 		}
-		else if (UScriptStruct* AsStruct = FindFirstObject<UScriptStruct>(*T, EFindFirstObjectOptions::None))
+		else if (UScriptStruct* AsStruct = ResolveScriptStruct(T))
 		{
 			OutPinType.PinCategory = UEdGraphSchema_K2::PC_Struct;
 			OutPinType.PinSubCategoryObject = AsStruct;
 		}
+		else if (UEnum* AsEnum = ResolveEnum(T))
+		{
+			// 블루프린트 enum 파라미터는 PC_Byte + enum 서브카테고리로 표현됩니다.
+			OutPinType.PinCategory = UEdGraphSchema_K2::PC_Byte;
+			OutPinType.PinSubCategoryObject = AsEnum;
+		}
 		else
 		{
-			OutError = FString::Printf(TEXT("Unknown param_type '%s'. Use bool|int|int64|float|double|string|name|text|<ClassName>|<StructName>"), *TypeStr);
+			OutError = FString::Printf(TEXT("Unknown param_type '%s'. Use bool|int|int64|float|double|string|name|text|<ClassName>|<StructName>|<EnumName>"), *TypeStr);
 			return false;
 		}
 	}
 	return true;
+}
+
+UScriptStruct* FBlueprintGraphEditor::ResolveScriptStruct(const FString& StructName)
+{
+	if (StructName.IsEmpty())
+		return nullptr;
+
+	if (UScriptStruct* S = FindFirstObject<UScriptStruct>(*StructName, EFindFirstObjectOptions::None))
+		return S;
+
+	// F 접두사 제거 후 재시도 (리플렉션 이름은 접두사가 없음: FVector2D → Vector2D).
+	if (StructName.Len() > 1 && StructName[0] == TEXT('F') && FChar::IsUpper(StructName[1]))
+	{
+		const FString Stripped = StructName.RightChop(1);
+		if (UScriptStruct* S = FindFirstObject<UScriptStruct>(*Stripped, EFindFirstObjectOptions::None))
+			return S;
+	}
+	return nullptr;
+}
+
+UEnum* FBlueprintGraphEditor::ResolveEnum(const FString& EnumName)
+{
+	if (EnumName.IsEmpty())
+		return nullptr;
+
+	// 단축명(접두사 유무 모두 처리) 우선, 실패 시 전역 검색 폴백.
+	if (UEnum* E = UClass::TryFindTypeSlow<UEnum>(EnumName))
+		return E;
+	return FindFirstObject<UEnum>(*EnumName, EFindFirstObjectOptions::None);
 }
 
 bool FBlueprintGraphEditor::AddFunctionParam(UEdGraph* FuncGraph, const FString& ParamName, const FString& ParamType,
@@ -697,6 +943,52 @@ bool FBlueprintGraphEditor::AddFunctionParam(UEdGraph* FuncGraph, const FString&
 
 	if (UBlueprint* Blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(FuncGraph))
 		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+	return true;
+}
+
+bool FBlueprintGraphEditor::AddCustomEventParam(UBlueprint* Blueprint, const FString& EventName,
+	const FString& ParamName, const FString& ParamType, FString& OutError)
+{
+	if (!Blueprint) { OutError = TEXT("Null blueprint"); return false; }
+	if (EventName.IsEmpty()) { OutError = TEXT("custom_event name is required"); return false; }
+	if (ParamName.IsEmpty()) { OutError = TEXT("param_name is required"); return false; }
+
+	FEdGraphPinType PinType;
+	if (!MakePinType(ParamType, PinType, OutError))
+		return false;
+
+	// 모든 그래프(이벤트 그래프 페이지 포함)에서 이름이 일치하는 CustomEvent를 탐색.
+	UK2Node_CustomEvent* Target = nullptr;
+	TArray<UEdGraph*> AllGraphs;
+	Blueprint->GetAllGraphs(AllGraphs);
+	const FName WantName(*EventName);
+	for (UEdGraph* G : AllGraphs)
+	{
+		if (!G) continue;
+		for (UEdGraphNode* Node : G->Nodes)
+		{
+			if (UK2Node_CustomEvent* CE = Cast<UK2Node_CustomEvent>(Node))
+			{
+				if (CE->CustomFunctionName == WantName) { Target = CE; break; }
+			}
+		}
+		if (Target) break;
+	}
+	if (!Target)
+	{
+		OutError = FString::Printf(TEXT("CustomEvent '%s' not found in blueprint. Add it first with add_node node_type=CustomEvent."), *EventName);
+		return false;
+	}
+
+	// CustomEvent의 파라미터는 이벤트 노드의 출력 핀입니다.
+	UEdGraphPin* NewPin = Target->CreateUserDefinedPin(FName(*ParamName), PinType, EGPD_Output, /*bUseUniqueName*/true);
+	if (!NewPin)
+	{
+		OutError = FString::Printf(TEXT("Failed to create user-defined pin '%s' on CustomEvent '%s'"), *ParamName, *EventName);
+		return false;
+	}
+
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
 	return true;
 }
 

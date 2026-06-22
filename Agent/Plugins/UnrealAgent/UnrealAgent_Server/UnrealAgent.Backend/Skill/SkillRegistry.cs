@@ -81,12 +81,19 @@ public sealed class SkillRegistry
     
     /// <summary>
     /// 슬래시 입력을 파싱하여 스킬 Instruction을 생성합니다.
+    /// "/name 인자..." 형태이면 인자 텍스트를 스킬 본문 뒤에 덧붙여 모델에 전달합니다.
     /// </summary>
     public string? BuildInstructionFromSlash(string SlashName)
     {
-        string Name = SlashName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)[0].TrimStart('/');
+        string[] Parts = SlashName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        string Name = Parts[0].TrimStart('/');
+        string Args = Parts.Length > 1 ? Parts[1].Trim() : string.Empty;
+
         SkillDefinition? Skill = GetSkill(Name);
-        
-        return Skill?.BuildInstruction();
+        if (Skill is null)
+            return null;
+
+        string Instruction = Skill.BuildInstruction();
+        return string.IsNullOrEmpty(Args) ? Instruction : $"{Instruction}\n\n{Args}";
     }
 }

@@ -7,6 +7,8 @@ class UEdGraph;
 class UEdGraphNode;
 class UEdGraphPin;
 class UClass;
+class UScriptStruct;
+class UEnum;
 class FJsonObject;
 class FMulticastDelegateProperty;
 struct FEdGraphPinType;
@@ -34,10 +36,11 @@ public:
 
 	/**
 	 * 노드를 생성하여 그래프에 추가합니다.
-	 * NodeType: CallFunction | Event | VariableGet | VariableSet | Branch | Sequence
+	 * NodeType: CallFunction | Event | OverrideEvent | VariableGet | VariableSet | Branch | Sequence
 	 *         | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate
+	 *         | SwitchEnum | CreateWidget | MacroInstance | ForLoop | ForEachLoop | WhileLoop | ...
 	 * NodeParams: 타입별 추가 인자 (function/target_class/event/variable/num_outputs/
-	 *             component/delegate_property/delegate_owner/bound_function)
+	 *             component/delegate_property/delegate_owner/bound_function/enum/macro)
 	 */
 	static UEdGraphNode* CreateNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& NodeType,
 		const TSharedPtr<FJsonObject>& NodeParams, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError);
@@ -49,6 +52,14 @@ public:
 	 */
 	static bool AddFunctionParam(UEdGraph* FuncGraph, const FString& ParamName, const FString& ParamType,
 		bool bIsOutput, FString& OutError);
+
+	/**
+	 * 이름이 일치하는 CustomEvent 노드(이벤트 그래프 소재)에 사용자 정의 입력 파라미터를 추가합니다.
+	 * CustomEvent 파라미터는 함수 그래프가 아닌 이벤트 노드의 출력 핀이므로 AddFunctionParam과 별도 경로입니다.
+	 * ParamType은 MakePinType 규칙(enum/struct/class 포함)을 따릅니다.
+	 */
+	static bool AddCustomEventParam(UBlueprint* Blueprint, const FString& EventName, const FString& ParamName,
+		const FString& ParamType, FString& OutError);
 
 	/** 두 노드의 핀을 연결합니다. 핀 이름이 비면 exec 핀을 자동 선택합니다. */
 	static bool ConnectPins(UEdGraph* Graph, const FString& SourceNodeId, const FString& SourcePinName,
@@ -96,12 +107,25 @@ private:
 	static UEdGraphNode* CreateFunctionResultNode(UEdGraph* Graph, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateComponentBoundEventNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& ComponentName, const FString& DelegateProperty, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateDelegateNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& NodeType, const FString& DelegateProperty, const FString& DelegateOwner, const FString& BoundFunction, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateSwitchEnumNode(UEdGraph* Graph, const FString& EnumName, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateMacroInstanceNode(UEdGraph* Graph, const FString& MacroName, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateWidgetNode(UEdGraph* Graph, const FString& WidgetClassName, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateOverrideEventNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& EventName, int32 PosX, int32 PosY, FString& OutError);
+
+	/** 표준 매크로(StandardMacros) 그래프를 이름으로 찾습니다. */
+	static UEdGraph* FindStandardMacroGraph(const FString& MacroName);
+	/** NodeType이 표준 매크로 이름(ForLoop/ForEachLoop/WhileLoop 등)인지 검사합니다. */
+	static bool IsStandardMacroNodeType(const FString& NodeType);
 
 	/** 클래스 이름을 UClass로 해석합니다 (Kismet 별칭 + 전역 검색). 실패 시 nullptr. */
 	static UClass* ResolveClass(const FString& ClassName);
+	/** 스트럭트 이름을 UScriptStruct로 해석합니다 (F 접두사 보정 포함). 실패 시 nullptr. */
+	static UScriptStruct* ResolveScriptStruct(const FString& StructName);
+	/** enum 이름을 UEnum으로 해석합니다. 실패 시 nullptr. */
+	static UEnum* ResolveEnum(const FString& EnumName);
 	/** Owner 클래스에서 멀티캐스트 델리게이트 프로퍼티를 찾습니다. */
 	static FMulticastDelegateProperty* FindMulticastDelegateProperty(UClass* Owner, const FString& PropertyName);
-	/** 타입 문자열을 FEdGraphPinType으로 변환합니다 (bool/int/float/string/<Class>/<Struct> 등). */
+	/** 타입 문자열을 FEdGraphPinType으로 변환합니다 (bool/int/float/string/<Class>/<Struct>/<Enum> 등). */
 	static bool MakePinType(const FString& TypeStr, struct FEdGraphPinType& OutPinType, FString& OutError);
 
 	static UEdGraphPin* FindPinByName(UEdGraphNode* Node, const FString& PinName, int32 Direction);

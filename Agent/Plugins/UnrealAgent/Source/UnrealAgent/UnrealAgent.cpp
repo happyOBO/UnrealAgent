@@ -2,6 +2,7 @@
 #include "Chat/AgentChatCommands.h"
 #include "Chat/AgentChatInputProcessor.h"
 #include "Chat/AgentChatBrowser.h"
+#include "Log/AgentLogCapture.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Docking/TabManager.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -19,6 +20,9 @@ const FName FUnrealAgentModule::ChatTabName(TEXT("UnrealAgentChat"));
 
 void FUnrealAgentModule::StartupModule()
 {
+	// 0. 출력 로그 캡처 디바이스 등록 (get_output_log 도구의 소스)
+	FAgentLogCapture::Startup();
+
 	// 1. 커맨드 등록 (Alt+F2 단축키 정의)
 	FAgentChatCommands::Register();
 	
@@ -56,6 +60,8 @@ void FUnrealAgentModule::ShutdownModule()
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(ChatTabName);
 
 	FAgentChatCommands::Unregister();
+
+	FAgentLogCapture::Shutdown();
 }
 
 //-----------------------------------------------------------------------------
