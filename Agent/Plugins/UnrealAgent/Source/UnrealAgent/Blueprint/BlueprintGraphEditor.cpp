@@ -28,6 +28,8 @@
 
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
+#include "Factories/BlueprintFactory.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/GameplayStatics.h"
@@ -1366,6 +1368,111 @@ bool FBlueprintGraphEditor::AddComponent(UBlueprint* Blueprint, const FString& C
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
 	return true;
+}
+
+//-----------------------------------------------------------------------------
+// 변수 / 블루프린트 생성
+//-----------------------------------------------------------------------------
+
+bool FBlueprintGraphEditor::AddVariable(UBlueprint* Blueprint, const FString& VarName, const FString& VarType,
+	const FString& DefaultValue, FString& OutError)
+{
+	if (!Blueprint)
+	{
+		OutError = TEXT("Null blueprint");
+		return false;
+	}
+	if (VarName.IsEmpty())
+	{
+		OutError = TEXT("add_variable requires 'variable_name'");
+		return false;
+	}
+
+	const FName VarFName(*VarName);
+
+	// 이름 중복 검사 (이미 있으면 AddMemberVariable이 조용히 실패하므로 먼저 명확히 거른다).
+	for (const FBPVariableDescription& Var : Blueprint->NewVariables)
+	{
+		if (Var.VarName == VarFName)
+		{
+			OutError = FString::Printf(TEXT("Variable '%s' already exists"), *VarName);
+			return false;
+		}
+	}
+
+	FEdGraphPinType PinType;
+	if (!MakePinType(VarType, PinType, OutError))
+		return false;
+
+	if (!FBlueprintEditorUtils::AddMemberVariable(Blueprint, VarFName, PinType, DefaultValue))
+	{
+		OutError = FString::Printf(TEXT("Failed to add variable '%s' (%s)"), *VarName, *VarType);
+		return false;
+	}
+
+	return true;
+}
+
+UBlueprint* FBlueprintGraphEditor::CreateBlueprint(const FString& PackagePath, const FString& BlueprintName,
+	const FString& ParentClassName, FString& OutError)
+{
+	if (PackagePath.IsEmpty() || BlueprintName.IsEmpty())
+	{
+		OutError = TEXT("create_blueprint requires 'package_path' and 'blueprint_name'");
+		return nullptr;
+	}
+
+	// 부모 클래스 해석 (네이티브 단축명 / 경로 / BP 경로 모두 지원).
+	UClass* ParentClass = ResolveClass(ParentClassName);
+	if (!ParentClass)
+	{
+		OutError = FString::Printf(TEXT("Parent class not found: '%s'"), *ParentClassName);
+		return nullptr;
+	}
+
+	// 패키지 경로 정규화: 선행 '/' 없으면 /Game/ 보정, 엔진/스크립트 경로 차단.
+	FString Folder = PackagePath;
+	if (!Folder.StartsWith(TEXT("/")))
+		Folder = TEXT("/Game/") + Folder;
+	Folder.RemoveFromEnd(TEXT("/"));
+	if (Folder.StartsWith(TEXT("/Engine/")) || Folder.StartsWith(TEXT("/Script/")))
+	{
+		OutError = TEXT("Cannot create blueprints under /Engine or /Script.");
+		return nullptr;
+	}
+
+	const FString FullPath = Folder / BlueprintName;
+
+	// 중복 에셋 검사.
+	if (StaticLoadObject(UBlueprint::StaticClass(), nullptr, *FullPath))
+	{
+		OutError = FString::Printf(TEXT("Blueprint already exists: %s"), *FullPath);
+		return nullptr;
+	}
+
+	UPackage* Package = CreatePackage(*FullPath);
+	if (!Package)
+	{
+		OutError = FString::Printf(TEXT("Failed to create package: %s"), *FullPath);
+		return nullptr;
+	}
+
+	UBlueprintFactory* Factory = NewObject<UBlueprintFactory>();
+	Factory->ParentClass = ParentClass;
+
+	UBlueprint* NewBlueprint = Cast<UBlueprint>(Factory->FactoryCreateNew(
+		UBlueprint::StaticClass(), Package, FName(*BlueprintName),
+		RF_Public | RF_Standalone | RF_Transactional, nullptr, GWarn));
+
+	if (!NewBlueprint)
+	{
+		OutError = FString::Printf(TEXT("Factory failed to create Blueprint with parent '%s'"), *ParentClass->GetName());
+		return nullptr;
+	}
+
+	FAssetRegistryModule::AssetCreated(NewBlueprint);
+	NewBlueprint->MarkPackageDirty();
+	return NewBlueprint;
 }
 
 //-----------------------------------------------------------------------------

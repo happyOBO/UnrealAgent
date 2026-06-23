@@ -90,6 +90,23 @@ public:
 	static bool AddComponent(UBlueprint* Blueprint, const FString& ComponentType, const FString& ComponentName,
 		const FString& StaticMeshPath, FString& OutError);
 
+	/**
+	 * 블루프린트에 멤버 변수를 추가합니다.
+	 * VarType은 MakePinType 규칙(bool|int|int64|float|double|string|name|text|<ClassName>|<StructName>|<EnumName>).
+	 * DefaultValue가 비어있지 않으면 변수 기본값으로 설정합니다. 같은 이름이 이미 있으면 false + OutError.
+	 */
+	static bool AddVariable(UBlueprint* Blueprint, const FString& VarName, const FString& VarType,
+		const FString& DefaultValue, FString& OutError);
+
+	/**
+	 * 새 블루프린트 에셋을 생성합니다 (UBlueprintFactory 경유, 게임 스레드).
+	 * PackagePath: 폴더 경로(예: /Game/UI/Inventory). 선행 '/' 없으면 /Game/ 보정.
+	 * ParentClassName: ResolveClass 규칙(네이티브 단축명 | /Script 경로 | /Game BP 경로).
+	 * 엔진 경로/중복 에셋/부모 클래스 미해석 시 nullptr + OutError. 컴파일/저장은 호출부가 담당.
+	 */
+	static UBlueprint* CreateBlueprint(const FString& PackagePath, const FString& BlueprintName,
+		const FString& ParentClassName, FString& OutError);
+
 	/** 블루프린트를 컴파일하고 저장 마크합니다. bOutSuccess에 성공 여부, 반환값은 상태/메시지. */
 	static FString CompileAndSave(UBlueprint* Blueprint, bool& bOutSuccess);
 

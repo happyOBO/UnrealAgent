@@ -19,12 +19,12 @@ struct FBlueprintModifyTool : public FMcpTool
 
 	/** 수행할 연산 */
 	UPROPERTY(meta=(ToolParam="operation", Required,
-		Description="One of: add_node, add_component, add_function_param, connect_pins, disconnect_pins, set_pin_value, delete_node, list_nodes"))
+		Description="One of: create_blueprint, add_variable, add_node, add_component, add_function_param, connect_pins, disconnect_pins, set_pin_value, delete_node, list_nodes"))
 	FString Operation;
 
-	/** 대상 블루프린트 경로 (예: /Game/BP_Door) */
-	UPROPERTY(meta=(ToolParam="blueprint_path", Required,
-		Description="Blueprint asset path, e.g. /Game/Blueprints/BP_Door"))
+	/** 대상 블루프린트 경로 (예: /Game/BP_Door). create_blueprint은 불필요(대신 package_path/blueprint_name 사용). */
+	UPROPERTY(meta=(ToolParam="blueprint_path",
+		Description="Blueprint asset path, e.g. /Game/Blueprints/BP_Door. Required for all ops EXCEPT create_blueprint."))
 	FString BlueprintPath;
 
 	// ── 그래프 선택 (옵션, 모든 연산) ──
@@ -156,6 +156,34 @@ struct FBlueprintModifyTool : public FMcpTool
 	UPROPERTY(meta=(ToolParam="custom_event",
 		Description="[add_function_param] If set, add the parameter to the named CustomEvent node (in the event graph) instead of a function graph. e.g. custom_event=SetItem, param_name=Item, param_type=ItemInstance"))
 	FString CustomEvent;
+
+	// ── add_variable (멤버 변수 추가) ──
+
+	UPROPERTY(meta=(ToolParam="variable_name",
+		Description="[add_variable] Name of the member variable to add"))
+	FString VariableName;
+
+	UPROPERTY(meta=(ToolParam="variable_type",
+		Description="[add_variable] Type: bool | int | int64 | float | double | string | name | text | <ClassName> | <StructName> | <EnumName>. For an object reference, pass the class name, e.g. WBP_InventoryScreen, ItemInstance, Actor."))
+	FString VariableType;
+
+	UPROPERTY(meta=(ToolParam="default_value",
+		Description="[add_variable] Optional default value (string; parsed by variable type)"))
+	FString DefaultValue;
+
+	// ── create_blueprint (새 블루프린트 에셋 생성) ──
+
+	UPROPERTY(meta=(ToolParam="package_path",
+		Description="[create_blueprint] Folder path for the new asset, e.g. /Game/UI/Inventory"))
+	FString PackagePath;
+
+	UPROPERTY(meta=(ToolParam="blueprint_name",
+		Description="[create_blueprint] Name of the new Blueprint asset, e.g. BP_ItemDragDrop"))
+	FString BlueprintName;
+
+	UPROPERTY(meta=(ToolParam="parent_class",
+		Description="[create_blueprint] Parent class: native shortname (DragDropOperation, Actor), /Script path, or /Game BP path"))
+	FString ParentClass;
 
 	virtual FString ToolDescription() const override;
 	virtual FMcpResponse Execute() override;
