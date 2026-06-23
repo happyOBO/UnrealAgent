@@ -1,6 +1,6 @@
 ---
 name: material
-description: 머티리얼 인스턴스 생성/파라미터 설정/할당 (Python unreal API)
+description: Material instance creation / parameter setting / assignment (Python unreal API)
 keywords:
   - material
   - 머티리얼
@@ -20,7 +20,7 @@ keywords:
   - vector parameter
 ---
 
-머티리얼 인스턴스 생성·파라미터 설정은 `unreal.MaterialEditingLibrary`를 사용한다.
+Use `unreal.MaterialEditingLibrary` for material instance creation and parameter setting.
 
 ```python
 import unreal
@@ -28,29 +28,33 @@ import unreal
 asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
 parent = unreal.EditorAssetLibrary.load_asset('/Game/Materials/M_Master')
 
-# 머티리얼 인스턴스 컨스턴트(에디터 저장형) 생성
+# Create a Material Instance Constant (the editor-saved kind)
 factory = unreal.MaterialInstanceConstantFactoryNew()
 mi = asset_tools.create_asset('MI_Wood_Dark', '/Game/Materials',
                               unreal.MaterialInstanceConstant, factory)
 
-# 부모 지정
+# Set parent
 unreal.MaterialEditingLibrary.set_material_instance_parent(mi, parent)
 
-# 파라미터 설정 (부모 머티리얼에 동일 이름의 파라미터가 노출돼 있어야 함)
+# Set parameters (a parameter of the same name must be exposed on the parent material)
 unreal.MaterialEditingLibrary.set_material_instance_scalar_parameter_value(mi, 'Roughness', 0.5)
 unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(
     mi, 'BaseColor', unreal.LinearColor(1.0, 0.0, 0.0, 1.0))
 tex = unreal.EditorAssetLibrary.load_asset('/Game/Textures/T_Wood')
 unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value(mi, 'Albedo', tex)
 
-# 저장
+# Save
 unreal.EditorAssetLibrary.save_asset(mi.get_path_name())
 
-# 액터 메시에 할당
+# Assign to an actor's mesh
 smc = actor.static_mesh_component
-smc.set_material(0, mi)   # 슬롯 인덱스 0
+smc.set_material(0, mi)   # slot index 0
 ```
 
-- 파라미터 이름은 **부모 머티리얼에 노출된 파라미터명과 정확히 일치**해야 한다. 모르면 `unreal.MaterialEditingLibrary.get_scalar_parameter_names(parent)` / `get_vector_parameter_names(parent)`로 조회.
-- 런타임 동적 변경은 `create_dynamic_material_instance`를 쓰지만, 에디터 에셋 작업은 위 컨스턴트 방식.
-- 색은 항상 `unreal.LinearColor` (0~1 범위), `unreal.Color`(0~255)와 혼동 금지.
+- Parameter names must **exactly match the parameter names exposed on the parent material**. If
+  unknown, query with `unreal.MaterialEditingLibrary.get_scalar_parameter_names(parent)` /
+  `get_vector_parameter_names(parent)`.
+- For runtime dynamic changes use `create_dynamic_material_instance`, but for editor asset work
+  use the constant approach above.
+- Color is always `unreal.LinearColor` (0–1 range); do not confuse it with `unreal.Color`
+  (0–255).

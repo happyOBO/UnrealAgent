@@ -1,38 +1,46 @@
 ---
 name: task-doc
-description: Docs 폴더의 작업/기획 문서를 기반으로 구현을 진행한다. 착수 전 기존 컨벤션·중복·이미 구현된 항목을 자동 점검.
+description: Implement work based on a task/design document in the Docs folder. Automatically checks existing conventions, duplication, and already-implemented items before starting.
 ---
 
-이 작업은 **완료까지 연속으로 수행**한다. 컨텍스트가 길어져도 한 단계만 하고 멈추지
-말 것. 파일은 절대 미완성 상태로 두지 말고, 현재 편집 중인 파일을 완성·저장한 뒤
-다음으로 넘어간다.
+Carry this out **continuously to completion**. Even as context grows long, do not stop after
+a single step. Never leave a file half-finished — complete and save the file you are currently
+editing before moving on.
 
-## 입력
-사용자가 지정한 작업 문서(예: `Docs/INVENTORY_SYSTEM_KR.md`,
-`Docs/TASK_aim_pipeline_phase1.md`, `Docs/DEVELOPMENT_PLAN_KR.md`). 지정이 없으면 어떤
-문서를 기반으로 할지 먼저 묻는다.
+## Input
+The task document the user specifies (e.g. `Docs/INVENTORY_SYSTEM_KR.md`,
+`Docs/TASK_aim_pipeline_phase1.md`, `Docs/DEVELOPMENT_PLAN_KR.md`). If none is specified, ask
+first which document to base the work on.
 
-## 1단계 — 착수 전 정합성 점검 (반드시 먼저)
-문서를 곧바로 구현하지 말고, 현재 프로젝트와의 정합성을 먼저 확인한다:
-1. **중복 기능/에셋**: 문서가 새로 만들라는 클래스·GameplayTag·DataAsset·에셋이 이미
-   프로젝트에 존재하는지 검색한다. 있으면 새로 만들지 말고 기존 것을 재사용한다.
-2. **GameplayTag 네이밍**: 문서의 태그 이름이 기존 태그 체계와 다른 이름으로 같은
-   개념을 중복 정의하지 않는지 확인. 기존 태그 네이밍에 맞춘다.
-3. **코드 컨벤션**: 기존 코드 스타일(네이밍, 모듈 구조, include 패턴)에 맞춘다.
-4. **이미 구현된 항목 / 범위 밖 항목**: 문서에 있으나 이미 구현됐거나(예: 일부 시스템)
-   현재 범위에 없는 기능(예: sprint)은 제외하고, 제외 사유를 한 줄로 보고한다.
+## Step 1 — Pre-start consistency check (always first)
+Do not implement the document right away; first confirm its consistency with the current
+project:
+1. **Duplicate features/assets**: Search whether the classes, GameplayTags, DataAssets, or
+   assets the document asks you to create already exist in the project. If they do, reuse the
+   existing ones instead of creating new ones.
+2. **GameplayTag naming**: Check that the document's tag names do not redundantly define the
+   same concept under a different name than the existing tag scheme. Align with the existing
+   tag naming.
+3. **Code conventions**: Match the existing code style (naming, module structure, include
+   patterns).
+4. **Already-implemented / out-of-scope items**: Exclude features that the document lists but
+   are already implemented (e.g. parts of a system) or are out of current scope (e.g. sprint),
+   and report the reason for exclusion in one line.
 
-점검 결과 문서와 현 프로젝트가 충돌하면, 구현을 강행하지 말고 충돌 지점과 권장 조정을
-먼저 사용자에게 보고한다.
+If the check finds the document conflicting with the current project, do not force the
+implementation — first report the conflict points and recommended adjustments to the user.
 
-## 2단계 — 구현
-- 문서의 단계(Part/Phase) 순서대로 진행. 각 단계 끝마다 컴파일 가능 상태를 유지.
-- 코드로 가능한 것은 코드로 처리. **언리얼 에디터에서만 가능한 수동 작업**(에셋 배치,
-  일부 블루프린트 핀 연결 등 도구로 불가한 부분)은 임의로 건너뛰지 말고, 어떤 도구로도
-  자동화가 안 되는 이유와 함께 `Docs/` 에 수동 가이드 문서로 정리한다.
-- 블루프린트/위젯 작업은 widget_modify·blueprint_modify 우선 시도. 불가하면 수동 안내.
+## Step 2 — Implementation
+- Proceed in the document's order (Part/Phase). Keep a compilable state at the end of each step.
+- Do in code what can be done in code. For **manual work only possible in the Unreal Editor**
+  (asset placement, some Blueprint pin connections, and other parts not doable via tools), do
+  not arbitrarily skip it — write it up as a manual guide document under `Docs/`, together with
+  the reason no tool can automate it.
+- For Blueprint/widget work, try widget_modify and blueprint_modify first. If not possible,
+  give manual guidance.
 
-## 3단계 — 검증
-- C++ 변경 시 컴파일(또는 사용자에게 빌드 요청)로 에러 0 확인.
-- 런타임 영향이 있으면 `get_output_log` 로 경고/에러 확인.
-- 완료 후: 구현한 것 / 제외한 것 / 수동 작업으로 남긴 것을 구분해 요약 보고한다.
+## Step 3 — Verification
+- For C++ changes, compile (or ask the user to build) and confirm zero errors.
+- If there is runtime impact, check warnings/errors with `get_output_log`.
+- When done: report a summary distinguishing what was implemented / what was excluded / what
+  was left as manual work.

@@ -1,6 +1,6 @@
 ---
 name: replication
-description: 네트워크 리플리케이션 설정의 Python 가능 범위와 한계 (Python unreal API + blueprint_modify)
+description: What network replication setup is possible via Python, and its limits (Python unreal API + blueprint_modify)
 keywords:
   - replication
   - 리플리케이션
@@ -20,28 +20,30 @@ keywords:
   - replicate movement
 ---
 
-리플리케이션은 대부분 **선언적(UPROPERTY `Replicated`, UFUNCTION `Server/Client/NetMulticast` RPC)** 이거나 그래프 로직이라, 순수 Python 런타임 API로 할 수 있는 범위가 제한적이다. 가능/불가능을 명확히 구분한다.
+Replication is mostly **declarative** (UPROPERTY `Replicated`, UFUNCTION `Server/Client/
+NetMulticast` RPCs) or graph logic, so the scope achievable with the pure Python runtime API is
+limited. Distinguish clearly what is possible vs not.
 
-## Python으로 가능한 것 — 액터/컴포넌트의 리플리케이션 플래그
+## What IS possible via Python — actor/component replication flags
 
 ```python
 import unreal
 
 actor_sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-actor = ...  # 대상 액터 (보통 블루프린트 CDO 또는 배치 인스턴스)
+actor = ...  # target actor (usually a blueprint CDO or a placed instance)
 
-# 액터 리플리케이트 설정
+# Actor replicate settings
 actor.set_editor_property('replicates', True)
 actor.set_editor_property('replicate_movement', True)   # AActor.bReplicateMovement
 actor.set_editor_property('net_dormancy', unreal.NetDormancy.DORM_NEVER)
 actor.set_editor_property('net_update_frequency', 30.0)
 
-# 컴포넌트 리플리케이트
+# Component replicate
 comp = actor.get_component_by_class(unreal.StaticMeshComponent)
 comp.set_editor_property('is_replicated', True)
 ```
 
-블루프린트 클래스 기본값(CDO)에 적용하려면:
+To apply to a blueprint class default (CDO):
 ```python
 bp = unreal.EditorAssetLibrary.load_asset('/Game/BP_Pickup')
 cdo = unreal.get_default_object(bp.generated_class())
@@ -50,17 +52,28 @@ unreal.BlueprintEditorLibrary.compile_blueprint(bp)
 unreal.EditorAssetLibrary.save_asset(bp.get_path_name())
 ```
 
-## blueprint_modify로 하는 것 — 변수 리플리케이션 / RPC 노드
+## What you do with blueprint_modify — variable replication / RPC nodes
 
-- **변수의 `Replicated` / `RepNotify` 플래그**: 변수는 `blueprint_modify`로 추가하되, 리플리케이션 조건/RepNotify 함수 바인딩은 그래프·메타 설정이 필요하다. Python `add_member_variable`로 변수만 만들 수 있고 **리플리케이션 플래그 토글은 현재 자동화 한계** — 사용자에게 보고하고 에디터에서 변수 Details의 Replication 드롭다운으로 설정하도록 안내한다.
-- **RPC(Server/Client/Multicast 이벤트)**: 커스텀 이벤트는 `blueprint_modify add_node`(CustomEvent)로 만들 수 있으나, **RPC 복제 타입(Server/Reliable 등) 지정은 노드 메타 설정**이며 현재 도구로 토글 불가. 골격(이벤트+로직)까지 만들고 복제 타입 지정은 한계로 보고한다.
+- **A variable's `Replicated` / `RepNotify` flag**: add the variable with `blueprint_modify`, but
+  the replication condition / RepNotify function binding requires graph and meta settings. Python
+  `add_member_variable` can only create the variable, and **toggling the replication flag is
+  currently an automation limit** — report it to the user and advise setting it via the variable
+  Details' Replication dropdown in the editor.
+- **RPCs (Server/Client/Multicast events)**: a custom event can be created with
+  `blueprint_modify add_node` (CustomEvent), but **specifying the RPC replication type
+  (Server/Reliable, etc.) is a node-meta setting** and cannot be toggled with the current tool.
+  Build the skeleton (event+logic) and report the replication-type specification as a limit.
 
-## Python으로 불가능한 것 — 추정 금지
+## What is NOT possible via Python — no guessing
 
-- `GetLifetimeReplicatedProps` / `DOREPLIFETIME` 매크로는 C++ 전용. Python에 등가물 없다.
-- RPC의 `_Validate`/`WithValidation`, `COND_*` 리플리케이션 조건 — Python API 없음.
-- 비슷한 이름의 함수를 루프로 추정하지 말 것. 위 범위를 벗어나면 한계를 명확히 보고하고, C++/에디터 수동 작업이 필요함을 안내한다.
+- The `GetLifetimeReplicatedProps` / `DOREPLIFETIME` macros are C++-only. There is no Python
+  equivalent.
+- RPC `_Validate`/`WithValidation`, and `COND_*` replication conditions — no Python API.
+- Do not guess at similarly named functions in a loop. Beyond the scope above, report the limit
+  clearly and advise that C++/manual editor work is needed.
 
-## 권장 흐름
+## Recommended flow
 
-액터/컴포넌트 `replicates` 플래그 + `replicate_movement`까지 Python으로 설정 → 변수/RPC의 복제 타입은 `blueprint_modify`로 골격 생성 후 복제 메타는 한계 보고 → 변경 후 compile + save → `get_output_log`로 경고 확인.
+Set the actor/component `replicates` flag + `replicate_movement` via Python → build the skeleton
+of variable/RPC replication types with `blueprint_modify`, then report the replication meta as a
+limit → compile + save after changes → check warnings with `get_output_log`.

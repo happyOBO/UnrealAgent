@@ -1,6 +1,6 @@
 ---
 name: actor
-description: 액터 스폰/이동/삭제/조회 및 컴포넌트 (Python unreal API)
+description: Actor spawn/move/delete/query and components (Python unreal API)
 keywords:
   - actor
   - 액터
@@ -21,48 +21,53 @@ keywords:
   - level actor
 ---
 
-**액터 스폰/이동/삭제/속성설정과 레벨 액터 조회는 네이티브 도구를 우선 사용한다** — 구조화된 결과를 반환하고 Python 우회보다 안정적이다:
+**For actor spawn/move/delete/set-property and level-actor queries, prefer the native tools** —
+they return structured results and are more reliable than Python workarounds:
 - `actor_modify` (operation: `spawn`/`move`/`delete`/`set_property`)
-- `get_level_actors` (클래스/이름 필터 + 페이지네이션; 큰 레벨에서 전부 print하는 footgun 방지)
+- `get_level_actors` (class/name filter + pagination; avoids the footgun of printing everything
+  in a large level)
 
-네이티브 도구로 안 되는 세밀한 작업(특수 스폰 파라미터, 일괄 처리 로직 등)만 아래 Python으로 한다. UE5에서는 **에디터 서브시스템**을 우선 사용한다. `EditorLevelLibrary`는 deprecated이며 가급적 피한다.
+Use the Python below only for fine-grained work the native tools cannot do (special spawn
+parameters, batch-processing logic, etc.). In UE5, prefer **editor subsystems**.
+`EditorLevelLibrary` is deprecated and should be avoided when possible.
 
 ```python
 import unreal
 
 actor_sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 
-# 스폰 (클래스 + Transform)
+# Spawn (class + Transform)
 loc = unreal.Vector(0, 0, 100)
 rot = unreal.Rotator(0, 0, 0)
 actor = actor_sub.spawn_actor_from_class(unreal.StaticMeshActor, loc, rot)
 
-# 에셋(메시 등)으로 스폰
+# Spawn from an asset (mesh, etc.)
 mesh = unreal.EditorAssetLibrary.load_asset('/Game/Meshes/SM_Cube')
 actor = actor_sub.spawn_actor_from_object(mesh, loc, rot)
 
-# 모든 레벨 액터 조회 — 큰 레벨에서는 절대 전부 print하지 말고 클래스/이름으로 필터
+# Query all level actors — in a large level, never print them all; filter by class/name
 all_actors = actor_sub.get_all_level_actors()
 sm_actors = [a for a in all_actors if isinstance(a, unreal.StaticMeshActor)]
 
-# 라벨(아웃라이너 표시명)으로 찾기
+# Find by label (outliner display name)
 target = next((a for a in all_actors if a.get_actor_label() == 'Cube_1'), None)
 
-# Transform 조작 (항상 set_editor_property 대신 전용 메서드 사용 가능)
+# Transform manipulation (you can use the dedicated methods instead of set_editor_property)
 actor.set_actor_location(unreal.Vector(x, y, z), sweep=False, teleport=True)
 actor.set_actor_rotation(unreal.Rotator(pitch, yaw, roll), teleport_physics=True)
 actor.set_actor_scale3d(unreal.Vector(sx, sy, sz))
 actor.set_actor_label('NewName')
 
-# 컴포넌트 접근/속성 — set_editor_property로 pre/post edit 콜백 보장
-smc = actor.static_mesh_component   # StaticMeshActor의 경우
+# Component access/properties — set_editor_property guarantees pre/post edit callbacks
+smc = actor.static_mesh_component   # for a StaticMeshActor
 smc.set_editor_property('cast_shadow', False)
 smc.set_material(0, some_material)
 
-# 삭제
+# Delete
 actor_sub.destroy_actor(actor)
 ```
 
-- 좌표계: Z-up, 단위 cm. 회전은 `Rotator(pitch, yaw, roll)` 순서 주의.
-- 다수 액터 순회 시 반드시 `unreal.ScopedSlowTask`로 감싼다 (취소 가능, 에디터 프리즈 방지).
-- 선택 상태: `actor_sub.set_selected_level_actors([actor])`.
+- Coordinate system: Z-up, units cm. Watch the rotation argument order `Rotator(pitch, yaw, roll)`.
+- When iterating many actors, always wrap with `unreal.ScopedSlowTask` (cancelable, prevents
+  editor freeze).
+- Selection state: `actor_sub.set_selected_level_actors([actor])`.

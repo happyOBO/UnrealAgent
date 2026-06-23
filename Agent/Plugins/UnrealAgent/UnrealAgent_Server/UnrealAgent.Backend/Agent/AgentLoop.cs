@@ -35,8 +35,9 @@ public sealed class AgentLoop(
         Before doing anything else: use the `Read` tool to check the most recent
         `status: blocked` record under `.unrealagent/dev-blocked/`. If one represents
         unfinished work, briefly summarize what was blocked (tool + operation) and ask the
-        user "도구가 수정됐다면 이어서 진행할까요?" BEFORE proceeding. If there is no blocked
-        record, just continue with the user's request as normal.
+        user — in their own language — whether to resume it now that the tool may be fixed,
+        BEFORE proceeding. If there is no blocked record, just continue with the user's
+        request as normal.
         </system-reminder>
         """;
 

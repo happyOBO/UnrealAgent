@@ -99,7 +99,7 @@ public:
 private:
 	static UEdGraphNode* CreateCallFunctionNode(UEdGraph* Graph, const FString& FunctionName, const FString& TargetClass, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateEventNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& EventName, int32 PosX, int32 PosY, FString& OutError);
-	static UEdGraphNode* CreateVariableNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& VariableName, bool bSetter, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateVariableNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& VariableName, const FString& TargetClass, bool bSetter, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateBranchNode(UEdGraph* Graph, int32 PosX, int32 PosY);
 	static UEdGraphNode* CreateSequenceNode(UEdGraph* Graph, int32 PosX, int32 PosY);
 	static UEdGraphNode* CreateCastNode(UEdGraph* Graph, const FString& TargetClass, int32 PosX, int32 PosY, FString& OutError);

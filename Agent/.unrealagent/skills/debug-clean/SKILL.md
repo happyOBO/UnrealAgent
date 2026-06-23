@@ -1,30 +1,33 @@
 ---
 name: debug-clean
-description: 디버깅용으로 추가했던 임시 코드(로그·CVar·주석·디버그 위젯)를 찾아 제거하고 원래 상태로 정리한다.
+description: Find and remove temporary code added for debugging (logs, CVars, comments, debug widgets) and restore the original state.
 ---
 
-이 작업은 **완료까지 연속으로 수행**한다. 후보를 찾기만 하고 멈추지 말고 제거까지 끝낸 뒤
-컴파일 가능 상태를 확인한다.
+Carry this out **continuously to completion**. Do not stop at merely finding candidates —
+finish the removal and confirm a compilable state.
 
-## 목표
-문제 추적을 위해 임시로 넣었던 계측 코드만 골라 제거한다. **기능 코드는 건드리지 않는다.**
+## Goal
+Remove only the instrumentation code that was added temporarily to track down a problem.
+**Do not touch functional code.**
 
-## 제거 대상
-- 임시 `UE_LOG(...)` / `UE_VLOG` / on-screen `AddOnScreenDebugMessage`.
-- 디버깅용 `TAutoConsoleVariable` / CVar (예: `CVarDamageMode`)와 그 분기 코드.
-- 임시 주석(`// TEMP`, `// DEBUG`, `// 디버그용` 등)과 주석 처리해 둔 실험 코드.
-- 디버그 표시용 위젯/텍스트(예: AimPitch/Yaw 디버그 HUD)와 그 갱신 로직.
-- 임시 콘솔 명령 등록, 테스트용 키 바인딩.
+## Removal targets
+- Temporary `UE_LOG(...)` / `UE_VLOG` / on-screen `AddOnScreenDebugMessage`.
+- Debugging `TAutoConsoleVariable` / CVar (e.g. `CVarDamageMode`) and their branch code.
+- Temporary comments (`// TEMP`, `// DEBUG`, `// 디버그용`, etc.) and commented-out
+  experimental code.
+- Debug-display widgets/text (e.g. AimPitch/Yaw debug HUD) and their update logic.
+- Temporary console command registrations, test-only key bindings.
 
-## 절차
-1. **식별**: 최근 디버깅 세션에서 추가된 위 항목을 검색한다. 어디까지가 "임시"인지
-   불확실하면 제거 전에 후보 목록을 사용자에게 확인한다(기능성 로그는 남길 수 있음).
-2. **제거**: 계측만 제거하고, 그로 인해 빈 분기/미사용 변수/끊긴 include가 생기면 함께
-   정리한다.
-3. **검증**: 컴파일 가능 상태 확인. 위젯을 제거했으면 `capture_viewport` 로 정상 표시
-   확인. `get_output_log` 로 제거 누락한 로그가 더 없는지 확인.
-4. **보고**: 제거한 항목을 파일별로 한 줄씩 요약.
+## Procedure
+1. **Identify**: Search for the above items added during recent debugging sessions. If it is
+   unclear how far "temporary" extends, confirm the candidate list with the user before
+   removing (functional logs may be worth keeping).
+2. **Remove**: Remove only the instrumentation, and clean up any empty branches, unused
+   variables, or broken includes it leaves behind.
+3. **Verify**: Confirm a compilable state. If you removed a widget, confirm normal display with
+   `capture_viewport`. Use `get_output_log` to confirm no leftover logs remain.
+4. **Report**: Summarize the removed items, one line per file.
 
-## 주의
-- 영구적으로 유용한 운영 로그(예: 장비 부여 성공 로그)는 임의 제거하지 말고 사용자에게
-  확인. 의심스러우면 묻는다.
+## Caution
+- Do not arbitrarily remove permanently useful operational logs (e.g. an equip-grant success
+  log) — confirm with the user. When in doubt, ask.

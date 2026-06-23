@@ -1,6 +1,6 @@
 ---
 name: enhanced_input
-description: Enhanced Input — InputAction/IMC 데이터 에셋 생성 및 매핑 (Python unreal API)
+description: Enhanced Input — creating InputAction/IMC data assets and mappings (Python unreal API)
 keywords:
   - enhanced input
   - input action
@@ -17,31 +17,34 @@ keywords:
   - modifier
 ---
 
-Enhanced Input의 `InputAction`, `InputMappingContext`는 데이터 에셋이므로 AssetTools로 생성한다.
+Enhanced Input's `InputAction` and `InputMappingContext` are data assets, so create them with
+AssetTools.
 
 ```python
 import unreal
 
 asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
 
-# InputAction 생성 (값 타입 지정)
+# Create an InputAction (specify the value type)
 ia = asset_tools.create_asset('IA_Jump', '/Game/Input',
                               unreal.InputAction, unreal.InputActionFactory())
 ia.set_editor_property('value_type', unreal.InputActionValueType.BOOLEAN)
 unreal.EditorAssetLibrary.save_asset(ia.get_path_name())
 
-# InputMappingContext 생성
+# Create an InputMappingContext
 imc = asset_tools.create_asset('IMC_Default', '/Game/Input',
                                unreal.InputMappingContext, unreal.InputMappingContextFactory())
 
-# 액션에 키 매핑 추가
+# Add a key mapping to the action
 mapping = imc.map_key(ia, unreal.InputCoreTypes.SPACE_BAR)
-# 트리거/모디파이어가 필요하면 mapping에 추가 (구조는 help로 확인)
+# If triggers/modifiers are needed, add them to the mapping (check the structure with help)
 
 unreal.EditorAssetLibrary.save_asset(imc.get_path_name())
 ```
 
-- 값 타입: `BOOLEAN`(버튼), `AXIS1D`(스칼라), `AXIS2D`(이동), `AXIS3D`.
-- 팩토리 클래스명이 불확실하면 `dir(unreal)`에서 `*Factory`를 검색하거나 `help`로 확인.
-- 키 상수는 `unreal.InputCoreTypes`에 정의(예: `W_KEY`, `SPACE_BAR`, `GAMEPAD_FACE_BUTTON_BOTTOM`).
-- 실제 바인딩(액션→함수)은 캐릭터/플레이어컨트롤러 C++/BP에서 처리. Python은 에셋 준비까지.
+- Value types: `BOOLEAN` (button), `AXIS1D` (scalar), `AXIS2D` (movement), `AXIS3D`.
+- If a factory class name is uncertain, search `dir(unreal)` for `*Factory` or check with `help`.
+- Key constants are defined in `unreal.InputCoreTypes` (e.g. `W_KEY`, `SPACE_BAR`,
+  `GAMEPAD_FACE_BUTTON_BOTTOM`).
+- Actual binding (action→function) is handled in the character/player-controller C++/BP. Python
+  only goes as far as preparing the assets.

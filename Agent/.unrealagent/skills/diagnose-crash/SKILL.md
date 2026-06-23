@@ -1,35 +1,41 @@
 ---
 name: diagnose-crash
-description: 런타임 크래시(Access violation·콜스택·GAS ASC NULL 등)의 원인을 로그 근거 기반으로 분석한다. 추측 금지.
+description: Analyze the cause of a runtime crash (access violation, call stack, GAS ASC NULL, etc.) based on log evidence. No guessing.
 ---
 
-이 작업은 **완료까지 연속으로 수행**한다. 원인 후보를 나열만 하고 끝내지 말고, 근거를
-좁혀 가장 가능성 높은 원인과 구체적 수정안까지 제시한다.
+Carry this out **continuously to completion**. Do not stop at merely listing candidate causes
+— narrow them with evidence and present the single most likely cause along with a concrete fix.
 
-## 원칙
-- **추측 금지, 근거 우선**: 콜스택·로그·재현 조건을 근거로만 결론을 좁힌다. 확신이
-  없으면 어떤 로그/디버그 단계로 확인할지 제시한다.
-- 코드 한 줄을 주석 처리하면 크래시가 사라진다 등 사용자가 준 **이분 단서**를 적극
-  활용한다 — 그 줄이 만지는 객체의 수명/유효성을 1순위로 의심한다.
+## Principles
+- **No guessing, evidence first**: Narrow the conclusion using only the call stack, logs, and
+  repro conditions. If unsure, state which log/debug step to use to confirm.
+- Actively use **binary clues** the user gives — e.g. "commenting out one line makes the crash
+  go away." Suspect the lifetime/validity of the object that line touches as the top priority.
 
-## 절차
-1. **크래시 유형 식별**:
-   - `Exception 0xc0000005 / Access violation reading location` → 무효 포인터 역참조.
-     읽기 주소가 작으면(0x0000xxxx) null 계열, 그 외면 댕글링/해제 후 사용 가능성.
-   - 콜스택이 `mi_page_malloc` / `FMallocMimalloc::Realloc` 등 **할당자 내부**를
-     가리키면, 진짜 원인은 그 이전 프레임의 힙 손상(이미 망가진 메모리를 나중에 할당자가
-     건드림)일 수 있음 → 콜스택 상단이 아니라 힙을 더럽힌 코드를 찾는다.
-2. **GAS 특화 점검** (Shooter에서 빈발):
-   - `ApplyGameplayEffectSpecToTarget` 부근 크래시 → `TargetASC`/`SourceASC` 유효성,
-     `DamageSpec.Data.Get()` null 여부, GameplayEffect 클래스 유효성 확인.
-   - 로그에 `TargetASC=NULL` 패턴 → 대상 PlayerState/ASC 초기화 타이밍 문제.
-3. **재현 조건 확보**: 어떤 동작(이동 중 사격, 상대 피격 등)에서 100%/간헐 재현인지
-   확인. 멀티플레이 의존이면 standalone로는 재현이 어려울 수 있음을 감안.
-4. **메모리 디버깅 안내**: 힙 손상 의심 시 `-stompalloc` 활성화를 안내한다(Rider는
-   실행/디버그 구성의 프로그램 인수에 `-stompalloc` 추가). 적용 후 크래시 지점이
-   실제 손상 코드로 이동하는지 확인.
-5. **수정 또는 계측**: 원인이 특정되면 수정. 아직이면 유효성 검사 로그(객체 이름/포인터)
-   를 추가해 다음 재현에서 좁힌다.
+## Procedure
+1. **Identify the crash type**:
+   - `Exception 0xc0000005 / Access violation reading location` → dereference of an invalid
+     pointer. If the read address is small (0x0000xxxx) it is null-ish; otherwise it is likely
+     dangling / use-after-free.
+   - If the call stack points **inside the allocator** (`mi_page_malloc` /
+     `FMallocMimalloc::Realloc`, etc.), the real cause may be heap corruption in an earlier
+     frame (already-corrupted memory that the allocator touches later) → look for the code that
+     corrupted the heap, not the top of the call stack.
+2. **GAS-specific checks** (frequent in Shooter):
+   - Crash near `ApplyGameplayEffectSpecToTarget` → check validity of `TargetASC`/`SourceASC`,
+     whether `DamageSpec.Data.Get()` is null, and validity of the GameplayEffect class.
+   - A `TargetASC=NULL` pattern in the log → an initialization-timing problem of the target's
+     PlayerState/ASC.
+3. **Establish repro conditions**: Confirm which action (firing while moving, taking a hit from
+   an opponent, etc.) reproduces it 100% / intermittently. If it depends on multiplayer, account
+   for the fact that it may be hard to reproduce in standalone.
+4. **Memory debugging guidance**: When heap corruption is suspected, advise enabling
+   `-stompalloc` (in Rider, add `-stompalloc` to the program arguments of the run/debug
+   configuration). After applying, confirm whether the crash point moves to the actual
+   corrupting code.
+5. **Fix or instrument**: If the cause is pinned down, fix it. If not yet, add validity-check
+   logging (object name/pointer) to narrow it on the next repro.
 
-## 보고
-가장 가능성 높은 원인 1개 + 근거 + 수정안. 불확실하면 "다음 재현 시 확인할 것"을 명시.
+## Report
+The single most likely cause + evidence + fix. If uncertain, state "what to check on the next
+repro."

@@ -358,13 +358,13 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
                   - error: <verbatim error or limitation the tool reported>
                   - updated: <YYYY-MM-DD>
 
-                  ## 목표
+                  ## Goal
                   <what the user originally asked for>
 
-                  ## 완료된 작업
+                  ## Completed
                   - <what you already finished with the tools>
 
-                  ## 남은 작업 (도구 수정 후)
+                  ## Remaining (after the tool is fixed)
                   - <remaining steps from the blocked point to completion>
                   ```
                3. Tell the user which tool + operation is blocked and why, and end the turn.

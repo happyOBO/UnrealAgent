@@ -1,26 +1,26 @@
 ---
 name: verify
-description: 방금 변경한 내용이 실제 에디터/런타임에서 의도대로 동작하는지 뷰포트 캡처와 전체 출력 로그로 자가검증하고 보고한다.
+description: Self-verify that the change you just made actually behaves as intended in the live editor/runtime, using a viewport capture and the full output log, then report.
 ---
 
-이 작업은 **완료까지 연속으로 수행**한다. 검증 후 결과를 명확히 보고한다.
+Carry this out **continuously to completion**. After verifying, report the result clearly.
 
-## 목적
-직전 변경(코드/위젯/액터)이 실제로 동작하는지 직접 관찰해 확인한다. "코드상 맞다"로
-끝내지 말고 실제 화면·로그 근거를 확보한다.
+## Purpose
+Directly observe whether the most recent change (code/widget/actor) actually works. Do not
+stop at "it looks correct in the code" — gather real on-screen and log evidence.
 
-## 절차
-1. **시각 검증**: `capture_viewport` 로 현재 에디터/플레이 화면을 캡처해, 변경이 의도한
-   대로 보이는지 확인한다(위젯 배치, 액터 상태, 크로스헤어 등).
-2. **로그 검증**: `get_output_log` 로 관련 로그를 확인한다. **Info뿐 아니라 Warning과
-   Error를 반드시 확인**한다 — 경고/에러가 있으면 변경이 부분적으로만 동작하거나
-   부작용이 있다는 신호다.
-3. **콘솔 점검(선택)**: 필요하면 `run_console_command` 로 상태를 출력시켜(stat, 관련
-   show 플래그 등) 추가 근거를 얻는다.
-4. **판정**: 의도대로면 무엇을 확인했는지 근거와 함께 "정상" 보고. 아니면 관찰된
-   불일치/경고를 구체적으로 보고하고, 원인 후보를 제시한다.
+## Procedure
+1. **Visual check**: Use `capture_viewport` to capture the current editor/play screen and
+   confirm the change appears as intended (widget placement, actor state, crosshair, etc.).
+2. **Log check**: Use `get_output_log` to inspect the relevant logs. **Check Warnings and
+   Errors, not just Info** — a warning/error signals the change works only partially or has
+   side effects.
+3. **Console check (optional)**: If needed, use `run_console_command` to print state (stat,
+   relevant show flags, etc.) for additional evidence.
+4. **Verdict**: If it works as intended, report "OK" with the evidence of what you confirmed.
+   Otherwise, report the observed mismatch/warning concretely and propose likely causes.
 
-## 보고 형식
-- 확인한 것: (화면/로그에서 관찰된 사실)
-- 결과: 정상 / 문제 있음
-- 문제 시: 관찰된 증상 + 다음 조치 제안
+## Report format
+- What was confirmed: (facts observed on screen/in logs)
+- Result: OK / Has issues
+- If issues: observed symptom + suggested next action

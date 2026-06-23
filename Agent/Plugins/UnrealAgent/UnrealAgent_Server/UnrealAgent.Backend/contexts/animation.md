@@ -1,6 +1,6 @@
 ---
 name: animation
-description: 애님 시퀀스/몽타주/노티파이 및 애님 BP의 Python 한계 (Python unreal API)
+description: Anim sequences/montages/notifies and the Python limits of anim BPs (Python unreal API)
 keywords:
   - animation
   - 애니메이션
@@ -27,78 +27,112 @@ keywords:
   - retarget
 ---
 
-**스테이트 머신 구성은 Python이 아니라 `anim_blueprint_modify` 네이티브 도구를 사용한다.** Python으로는 애님 BP 그래프 편집이 불가능하다. 스테이트 머신 골격은 이 도구로 구성한다:
-- `create_state_machine` (state_machine 이름; AnimGraph 출력 포즈에 자동 연결)
+**For state-machine construction, use the `anim_blueprint_modify` native tool, not Python.**
+Python cannot edit the anim BP graph. Build the state-machine skeleton with this tool:
+- `create_state_machine` (state_machine name; auto-connected to the AnimGraph output pose)
 - `add_state` (state_machine, state_name)
-- `set_state_animation` (state_machine, state_name, anim_sequence 경로)
-- `set_entry_state` (진입 스테이트)
-- `add_transition` (from_state, to_state; 조건 그래프는 비어 있게 생성 — 조건 설정은 후속)
+- `set_state_animation` (state_machine, state_name, anim_sequence path)
+- `set_entry_state` (entry state)
+- `add_transition` (from_state, to_state; the condition graph is created empty — set the
+  condition afterward)
 
-전형적 흐름: `create_state_machine` → `add_state`×2 → 각 스테이트 `set_state_animation` → `set_entry_state` → `add_transition`.
+Typical flow: `create_state_machine` → `add_state`×2 → `set_state_animation` for each state →
+`set_entry_state` → `add_transition`.
 
-**AnimGraph 조회/추가는 `anim_blueprint_modify` 네이티브 도구로 한다** (Python으로 불가능).
-- 조회: `get_anim_graph` (읽기 전용) — 노드 type/node_id/slot_name/state_machine/핀 연결을 반환. **Python으로 핀/GUID/연결을 introspection하려 하지 말 것** (`get_all_pins`/`export_text`/`pins` 속성 없음, 시간 낭비). 또한 확인 목적으로 에디터를 열지 말 것 — 잘못하면 크래시한다.
+**Query/add AnimGraph nodes with the `anim_blueprint_modify` native tool** (not possible via
+Python).
+- Query: `get_anim_graph` (read-only) — returns node type/node_id/slot_name/state_machine/pin
+  connections. **Do not try to introspect pins/GUIDs/connections via Python** (no
+  `get_all_pins`/`export_text`/`pins` attributes — a waste of time). Also do not open the editor
+  to inspect — doing so wrongly can crash.
 
-메인 AnimGraph 대상이며 `add_*`는 노드 id(NodeGuid)를 반환한다:
-- `add_slot_node` (slot_name) — 몽타주 슬롯 재생 노드
-- `add_layered_blend_per_bone` (bones: 쉼표 구분 본 이름) — 본별 레이어 블렌드 노드
-- `connect_anim_nodes` (from_node_id, to_node_id; to에 `output`/`result`를 주면 Output Pose에 연결; from_pin/to_pin 생략 시 첫 출력/입력 포즈 핀)
+Targets the main AnimGraph, and `add_*` returns a node id (NodeGuid):
+- `add_slot_node` (slot_name) — a montage-slot playback node
+- `add_layered_blend_per_bone` (bones: comma-separated bone names) — a per-bone layered blend node
+- `connect_anim_nodes` (from_node_id, to_node_id; giving `output`/`result` for `to` connects to
+  the Output Pose; if from_pin/to_pin are omitted, the first output/input pose pin is used)
 
-**몽타주 슬롯 트랙 편집은 `montage_modify` 네이티브 도구로 한다.** Python은 `SlotAnimTracks`가 protected로 차단되어 슬롯 변경이 불가능하다. 이 도구는 C++에서 직접 조작한다:
-- `create` (montage_path, skeleton 또는 anim_sequence)
-- `add_slot` / `rename_slot` (slot_name, new_slot_name) / `add_segment` (slot_name, anim_sequence, start_time)
-- `get_info` — 슬롯/세그먼트 구성 조회
+**Edit montage slot tracks with the `montage_modify` native tool.** In Python, `SlotAnimTracks`
+is protected and blocked, so slot changes are not possible. This tool manipulates it directly in
+C++:
+- `create` (montage_path, skeleton or anim_sequence)
+- `add_slot` / `rename_slot` (slot_name, new_slot_name) / `add_segment` (slot_name,
+  anim_sequence, start_time)
+- `get_info` — query slot/segment composition
 
-**Aim Offset(에임 오프셋)은 `aim_offset_modify`(에셋) + `anim_blueprint_modify`(노드) 네이티브 도구로 한다.** Python으로 BlendSpace 샘플/축 편집은 불가능하다(`SampleData`/`AddSample` 차단). Aim offset은 `UAimOffsetBlendSpace`(BlendSpace의 additive 특화)다.
+**Do Aim Offset with the `aim_offset_modify` (asset) + `anim_blueprint_modify` (node) native
+tools.** Editing BlendSpace samples/axes via Python is not possible (`SampleData`/`AddSample`
+are blocked). An aim offset is a `UAimOffsetBlendSpace` (an additive specialization of
+BlendSpace).
 
-`aim_offset_modify` — 에셋 생성/샘플 편집:
-- `create` (aim_offset_path, skeleton) — 스켈레톤 명시 필수. 기본 Yaw/Pitch 축으로 생성.
-- `add_sample` (aim_offset_path, anim_sequence, yaw, pitch) — 코너 포즈(additive 시퀀스)를 Yaw/Pitch 좌표에 추가. 좌표가 축 범위 밖이면 범위를 자동 확장한다.
-- `get_info` (aim_offset_path) — 축 이름/범위와 샘플 목록 조회. **확인 목적으로 에디터를 열지 말 것**(크래시 위험) — get_info로 확인한다.
+`aim_offset_modify` — asset creation/sample editing:
+- `create` (aim_offset_path, skeleton) — the skeleton must be specified. Created with default
+  Yaw/Pitch axes.
+- `add_sample` (aim_offset_path, anim_sequence, yaw, pitch) — adds a corner pose (additive
+  sequence) at the Yaw/Pitch coordinate. If the coordinate is outside the axis range, the range
+  is auto-expanded.
+- `get_info` (aim_offset_path) — query axis names/ranges and the sample list. **Do not open the
+  editor to inspect** (crash risk) — verify via get_info.
 
-`anim_blueprint_modify` — 메인 AnimGraph에 aim offset 재생 노드 배치:
-- `add_aim_offset_node` (aim_offset_path) — `UAnimGraphNode_RotationOffsetBlendSpace` 노드를 추가하고 node_id(NodeGuid) 반환.
-- base pose 연결은 `connect_anim_nodes`로 한다(aim offset 노드의 첫 입력 포즈 핀이 Base Pose). aim offset 출력은 다시 Output Pose나 후속 노드로 연결.
+`anim_blueprint_modify` — place an aim offset playback node in the main AnimGraph:
+- `add_aim_offset_node` (aim_offset_path) — adds a `UAnimGraphNode_RotationOffsetBlendSpace` node
+  and returns a node_id (NodeGuid).
+- Connect the base pose with `connect_anim_nodes` (the aim offset node's first input pose pin is
+  the Base Pose). Connect the aim offset output on to the Output Pose or a subsequent node.
 
-전형적 흐름: `aim_offset_modify create` → `add_sample`×N(Yaw/Pitch 코너) → `anim_blueprint_modify add_aim_offset_node` → `connect_anim_nodes`(base pose 입력, 그리고 aim offset → output) → 컴파일(쓰기 op 후 자동).
+Typical flow: `aim_offset_modify create` → `add_sample`×N (Yaw/Pitch corners) →
+`anim_blueprint_modify add_aim_offset_node` → `connect_anim_nodes` (base pose input, and aim
+offset → output) → compile (automatic after write ops).
 
-한계 — 다음은 미지원이며 에디터에서 수동으로 한다: Yaw/Pitch float 핀의 변수 바인딩, 축 범위/그리드 분할 커스터마이즈. 한계는 사용자에게 보고한다.
+Limits — the following are unsupported and done manually in the editor: variable binding of the
+Yaw/Pitch float pins, customizing the axis range / grid division. Report limits to the user.
 
-애님 시퀀스 조회, 노티파이 추가, 커브 조작 등 데이터 수준 작업은 아래 Python으로 가능하다.
+Data-level work such as querying anim sequences, adding notifies, and manipulating curves is
+possible with the Python below.
 
 ```python
 import unreal
 
-# 스켈레탈 메시 / 애님 에셋 로드
+# Load a skeletal mesh / anim asset
 anim_seq = unreal.EditorAssetLibrary.load_asset('/Game/Anims/Run')   # AnimSequence
 
-# 길이/프레임 조회
+# Query length/frames
 length = anim_seq.get_play_length()
 fps = unreal.AnimationLibrary.get_frame_rate(anim_seq)
 num_frames = unreal.AnimationLibrary.get_num_frames(anim_seq)
 
-# 노티파이 추가
+# Add a notify
 unreal.AnimationLibrary.add_animation_notify_event(
     anim_seq, 'Footstep', 0.5, unreal.AnimNotify())
 
-# 애님 몽타주 생성 (시퀀스로부터)
+# Create an anim montage (from a sequence)
 montage = unreal.AnimationLibrary.create_anim_montage(anim_seq)
 
-# 스켈레톤 본 조회
+# Query skeleton bone
 skeleton = anim_seq.get_editor_property('target_skeleton')
 ```
 
-- 애님 BP 로직(상태 전이, 블렌드)이 필요하면 Python 한계를 명확히 알리고, 데이터 자산 준비까지만 자동화한다.
-- 노티파이/커브 작업 후 `save_asset` 필수.
+- If anim BP logic (state transitions, blends) is needed, clearly state the Python limit and
+  automate only up to preparing the data assets.
+- `save_asset` is required after notify/curve work.
 
-## Python으로 불가능한 것 — 추정/brute-force 금지
+## What is NOT possible via Python — no guessing / brute-force
 
-아래는 Python `unreal` API에 **존재하지 않는다**. 비슷한 이름을 루프로 추정하지 말 것(에디터를 얼리고 시간만 낭비한다). 필요하면 한계를 사용자에게 보고한다:
-- `unreal.SkeletalMeshLibrary`, `unreal.AnimationBlueprintLibrary` — **모듈 자체가 없다.**
-- 스켈레톤/스켈레탈 메시의 레퍼런스 스켈레톤·본 인덱스 조회: `reference_skeleton` / `ref_skeleton` 프로퍼티, `find_bone_index()` 메서드 — **없다.** 본 목록을 Python으로 열거하려 하지 말 것.
-- 애님 BP의 프리뷰 메시(`preview_skeletal_mesh`) — `AnimBlueprint`에 해당 프로퍼티 **없다**(에디터 전용 설정이며 기능에 영향 없음).
+The following **do not exist** in the Python `unreal` API. Do not guess at similar names in a
+loop (it freezes the editor and only wastes time). When needed, report the limit to the user:
+- `unreal.SkeletalMeshLibrary`, `unreal.AnimationBlueprintLibrary` — **the modules themselves do
+  not exist.**
+- Querying a skeleton/skeletal mesh's reference skeleton or bone indices: the `reference_skeleton`
+  / `ref_skeleton` properties, the `find_bone_index()` method — **do not exist.** Do not try to
+  enumerate the bone list via Python.
+- The anim BP's preview mesh (`preview_skeletal_mesh`) — `AnimBlueprint` has **no** such property
+  (it is an editor-only setting and does not affect functionality).
 
-대안:
-- **본 이름은 사용자/요청에서 받은 값을 그대로** `anim_blueprint_modify`의 `add_layered_blend_per_bone`(`bones`)에 넘긴다. Python으로 검증/열거하려 하지 말 것.
-- 스켈레톤 참조가 필요하면 자산의 문서화된 프로퍼티만 사용: `anim_seq.get_editor_property('target_skeleton')`, `skeletal_mesh.skeleton`.
-- 문서에 없는 API는 `dir()`/`help()`로 장시간 탐색하지 말고, 한계를 보고하고 전용 도구(`anim_blueprint_modify` / `montage_modify`)로 가능한 범위까지만 진행한다.
+Alternatives:
+- **Pass bone names exactly as received from the user/request** to `anim_blueprint_modify`'s
+  `add_layered_blend_per_bone` (`bones`). Do not try to validate/enumerate them via Python.
+- If a skeleton reference is needed, use only the documented asset properties:
+  `anim_seq.get_editor_property('target_skeleton')`, `skeletal_mesh.skeleton`.
+- For APIs not in the docs, do not spend a long time exploring with `dir()`/`help()`; report the
+  limit and proceed only as far as possible with the dedicated tools (`anim_blueprint_modify` /
+  `montage_modify`).

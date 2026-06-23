@@ -143,11 +143,15 @@ UEdGraphNode* FBlueprintGraphEditor::CreateNode(UEdGraph* Graph, UBlueprint* Blu
 	}
 	else if (NodeType.Equals(TEXT("VariableGet"), ESearchCase::IgnoreCase) || NodeType.Equals(TEXT("GetVariable"), ESearchCase::IgnoreCase))
 	{
-		NewNode = CreateVariableNode(Graph, Blueprint, Params->GetStringField(TEXT("variable")), false, PosX, PosY, OutError);
+		FString VarTargetClass;
+		Params->TryGetStringField(TEXT("target_class"), VarTargetClass);
+		NewNode = CreateVariableNode(Graph, Blueprint, Params->GetStringField(TEXT("variable")), VarTargetClass, false, PosX, PosY, OutError);
 	}
 	else if (NodeType.Equals(TEXT("VariableSet"), ESearchCase::IgnoreCase) || NodeType.Equals(TEXT("SetVariable"), ESearchCase::IgnoreCase))
 	{
-		NewNode = CreateVariableNode(Graph, Blueprint, Params->GetStringField(TEXT("variable")), true, PosX, PosY, OutError);
+		FString VarTargetClass;
+		Params->TryGetStringField(TEXT("target_class"), VarTargetClass);
+		NewNode = CreateVariableNode(Graph, Blueprint, Params->GetStringField(TEXT("variable")), VarTargetClass, true, PosX, PosY, OutError);
 	}
 	else if (NodeType.Equals(TEXT("Branch"), ESearchCase::IgnoreCase) || NodeType.Equals(TEXT("IfThenElse"), ESearchCase::IgnoreCase))
 	{
@@ -332,7 +336,7 @@ UEdGraphNode* FBlueprintGraphEditor::CreateEventNode(UEdGraph* Graph, UBlueprint
 	return EventNode;
 }
 
-UEdGraphNode* FBlueprintGraphEditor::CreateVariableNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& VariableName, bool bSetter, int32 PosX, int32 PosY, FString& OutError)
+UEdGraphNode* FBlueprintGraphEditor::CreateVariableNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& VariableName, const FString& TargetClass, bool bSetter, int32 PosX, int32 PosY, FString& OutError)
 {
 	if (VariableName.IsEmpty())
 	{
@@ -341,6 +345,58 @@ UEdGraphNode* FBlueprintGraphEditor::CreateVariableNode(UEdGraph* Graph, UBluepr
 	}
 
 	const FName VarName(*VariableName);
+
+	// ── 외부 멤버 경로 ──
+	// target_class가 주어지면 외부 UObject의 멤버 프로퍼티(예: 데이터 에셋의 BlueprintReadOnly
+	// UPROPERTY)를 읽고/쓴다. UE는 BlueprintReadOnly 프로퍼티를 getter 함수 없이도 Target 핀을
+	// 가진 멤버 Get 노드로 노출하므로, SetExternalMember로 동일 노드를 생성한다.
+	if (!TargetClass.IsEmpty())
+	{
+		UClass* OwnerClass = ResolveClass(TargetClass);
+		if (!OwnerClass)
+		{
+			OutError = FString::Printf(TEXT("target_class '%s' could not be resolved to a UClass for variable '%s'."), *TargetClass, *VariableName);
+			return nullptr;
+		}
+
+		FProperty* Prop = FindFProperty<FProperty>(OwnerClass, VarName);
+		if (!Prop)
+		{
+			OutError = FString::Printf(TEXT("Property '%s' not found on class '%s'."), *VariableName, *OwnerClass->GetName());
+			return nullptr;
+		}
+		if (!Prop->HasAnyPropertyFlags(CPF_BlueprintVisible))
+		{
+			OutError = FString::Printf(TEXT("Property '%s' on '%s' is not Blueprint-visible (no BlueprintReadOnly/BlueprintReadWrite)."), *VariableName, *OwnerClass->GetName());
+			return nullptr;
+		}
+		if (bSetter && Prop->HasAnyPropertyFlags(CPF_BlueprintReadOnly))
+		{
+			OutError = FString::Printf(TEXT("Property '%s' on '%s' is BlueprintReadOnly; cannot create a Set node. Use VariableGet instead."), *VariableName, *OwnerClass->GetName());
+			return nullptr;
+		}
+
+		if (bSetter)
+		{
+			FGraphNodeCreator<UK2Node_VariableSet> NodeCreator(*Graph);
+			UK2Node_VariableSet* SetNode = NodeCreator.CreateNode();
+			SetNode->VariableReference.SetExternalMember(VarName, OwnerClass);
+			SetNode->NodePosX = PosX;
+			SetNode->NodePosY = PosY;
+			NodeCreator.Finalize();
+			return SetNode;
+		}
+
+		FGraphNodeCreator<UK2Node_VariableGet> NodeCreator(*Graph);
+		UK2Node_VariableGet* GetNode = NodeCreator.CreateNode();
+		GetNode->VariableReference.SetExternalMember(VarName, OwnerClass);
+		GetNode->NodePosX = PosX;
+		GetNode->NodePosY = PosY;
+		NodeCreator.Finalize();
+		return GetNode;
+	}
+
+	// ── Self 멤버 경로 (기존 동작) ──
 	bool bFound = false;
 	if (Blueprint)
 	{
@@ -362,7 +418,7 @@ UEdGraphNode* FBlueprintGraphEditor::CreateVariableNode(UEdGraph* Graph, UBluepr
 	}
 	if (!bFound)
 	{
-		OutError = FString::Printf(TEXT("Variable '%s' not found in Blueprint (checked user variables + widget/inherited members). For a UMG widget, enable 'Is Variable' on it first."), *VariableName);
+		OutError = FString::Printf(TEXT("Variable '%s' not found in Blueprint (checked user variables + widget/inherited members). For an external object's property, pass target_class. For a UMG widget, enable 'Is Variable' on it first."), *VariableName);
 		return nullptr;
 	}
 
