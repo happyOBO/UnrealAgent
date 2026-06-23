@@ -26,7 +26,8 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
         ModeOverride   = 1 << 1,
         UnrealAgentMd  = 1 << 2,
         Skills         = 1 << 3,
-        All            = Identity | ModeOverride | UnrealAgentMd | Skills,
+        DevBlockMode   = 1 << 4,
+        All            = Identity | ModeOverride | UnrealAgentMd | Skills | DevBlockMode,
     }
     
     // ── 시스템 프롬프트 구성 ──
@@ -81,6 +82,14 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
 
             if (Skills is not null)
               Sb.AppendLine(Skills);
+        }
+
+        if (!Skip.HasFlag(Section.DevBlockMode))
+        {
+            string? DevBlock = DevBlockSection();
+
+            if (DevBlock is not null)
+              Sb.AppendLine(DevBlock);
         }
 
         return Sb.ToString();
@@ -309,5 +318,58 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
                 /<skill-name> instead of attempting the task without it.
                 </system-reminder>
                 """;
+    }
+
+    /// <summary>
+    /// dev-block 모드 지침을 반환합니다. settings.local.json의 devBlockMode가 false이면 null입니다.
+    /// 개발 단계 전용: 네이티브 MCP 도구의 역량 한계에 막혔을 때 우회 대신 기록 후 중단하게 합니다.
+    /// 시스템 프롬프트는 매 턴 재생성되므로 토글이 다음 메시지부터 즉시 반영됩니다.
+    /// </summary>
+    private static string? DevBlockSection()
+    {
+        if (!AppSettings.IsDevBlockModeEnabled())
+          return null;
+
+        return """
+               <system-reminder>
+               # Dev-Block Mode (ACTIVE — OVERRIDES default behavior)
+
+               UnrealAgent's native MCP tools are still under development and have gaps.
+               In this mode, when a native MCP tool's CAPABILITY blocks the task, you MUST
+               NOT work around it. A capability block means:
+               - a tool returns an error / "not supported" for the operation, OR
+               - the operation is impossible with the available tool operations and the
+                 only remaining path is a hacky workaround (e.g. using execute_python to
+                 do what a dedicated tool should do, or telling the user to do it by hand).
+
+               This does NOT apply to ordinary user mistakes (wrong asset path, typo) or
+               transient failures that a normal retry/correction fixes — those you handle
+               as usual. It applies ONLY when the tool itself lacks the capability.
+
+               When you hit a capability block:
+               1. STOP the task. Do not attempt a workaround.
+               2. Using the built-in `Write` tool, create or update a record at
+                  `.unrealagent/dev-blocked/<task-slug>.md` (slug = short kebab-case of the
+                  task) with EXACTLY this template:
+                  ```markdown
+                  # <task title>
+                  - status: blocked
+                  - blocked_tool: <tool name> / op: <operation>
+                  - error: <verbatim error or limitation the tool reported>
+                  - updated: <YYYY-MM-DD>
+
+                  ## 목표
+                  <what the user originally asked for>
+
+                  ## 완료된 작업
+                  - <what you already finished with the tools>
+
+                  ## 남은 작업 (도구 수정 후)
+                  - <remaining steps from the blocked point to completion>
+                  ```
+               3. Tell the user which tool + operation is blocked and why, and end the turn.
+                  Do not keep going.
+               </system-reminder>
+               """;
     }
 }

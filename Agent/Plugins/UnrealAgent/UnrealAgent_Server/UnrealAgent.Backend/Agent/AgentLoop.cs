@@ -25,6 +25,22 @@ public sealed class AgentLoop(
     ContextRegistry ContextRegistry)
 {
     /// <summary>
+    /// dev-block 모드에서 세션 복원 직후 첫 턴에 1회 주입되는 재개-넛지입니다.
+    /// 복원된 대화는 --resume으로 이미 들어와 있으므로, 막혔던 작업이 있으면 먼저 재개를 제안하게 합니다.
+    /// </summary>
+    private const string ResumeCheckReminder = """
+        <system-reminder>
+        A previous session was just restored and dev-block mode is active. That prior
+        session may have stopped because a native MCP tool's capability was blocked.
+        Before doing anything else: use the `Read` tool to check the most recent
+        `status: blocked` record under `.unrealagent/dev-blocked/`. If one represents
+        unfinished work, briefly summarize what was blocked (tool + operation) and ask the
+        user "도구가 수정됐다면 이어서 진행할까요?" BEFORE proceeding. If there is no blocked
+        record, just continue with the user's request as normal.
+        </system-reminder>
+        """;
+
+    /// <summary>
     /// 사용자 메시지 1건에 대한 에이전트 루프를 실행합니다.
     /// 호출 1회가 claude CLI 프로세스 1개(1턴)에 대응하며, 세션은 --resume으로 이어집니다.
     /// </summary>
@@ -44,8 +60,25 @@ public sealed class AgentLoop(
         if (!Input.bCliCommand && Input.InjectedContext is null)
         {
             string? Context = ContextRegistry.MatchByKeywords(Input.Text);
-            if (Context is not null)
-                Input = Input with { InjectedContext = Context };
+
+            // dev-block 모드에서 세션 복원 직후 첫 턴이면 재개-넛지를 1회 주입합니다.
+            string? ResumeNudge = null;
+            if (Session.bResumeCheckPending)
+            {
+                ResumeNudge = ResumeCheckReminder;
+                Session.bResumeCheckPending = false;
+            }
+
+            string? Injected = (ResumeNudge, Context) switch
+            {
+                (not null, not null) => ResumeNudge + "\n\n" + Context,
+                (not null, null)     => ResumeNudge,
+                (null, not null)     => Context,
+                _                    => null,
+            };
+
+            if (Injected is not null)
+                Input = Input with { InjectedContext = Injected };
         }
 
         ClaudeRunOptions Options = new()

@@ -182,3 +182,6 @@ Agent/Plugins/**/Intermediate/*
 # Cache files for the editor to use
 Agent/DerivedDataCache/*
 
+# dev-block 모드가 남기는 작업 기록 (개발 단계 산출물)
+Agent/.unrealagent/dev-blocked/
+

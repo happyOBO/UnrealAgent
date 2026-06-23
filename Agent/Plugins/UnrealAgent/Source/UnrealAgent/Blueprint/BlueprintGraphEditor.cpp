@@ -7,6 +7,7 @@
 #include "EdGraphSchema_K2.h"
 
 #include "K2Node_CallFunction.h"
+#include "K2Node_CallArrayFunction.h"
 #include "K2Node_Event.h"
 #include "K2Node_VariableGet.h"
 #include "K2Node_VariableSet.h"
@@ -275,6 +276,20 @@ UEdGraphNode* FBlueprintGraphEditor::CreateCallFunctionNode(UEdGraph* Graph, con
 	{
 		OutError = FString::Printf(TEXT("Function '%s' not found (target_class='%s')"), *FunctionName, *TargetClass);
 		return nullptr;
+	}
+
+	// Array_Get/Array_Length/Array_Add 등 ArrayParm 메타 함수는 와일드카드 원소 타입 전파 로직
+	// (PropagateArrayTypeInfo)을 가진 UK2Node_CallArrayFunction으로 생성해야 한다. plain
+	// UK2Node_CallFunction으로 만들면 타입드 배열을 연결해도 와일드카드가 해석되지 않는다.
+	if (Function->HasMetaData(TEXT("ArrayParm")))
+	{
+		FGraphNodeCreator<UK2Node_CallArrayFunction> NodeCreator(*Graph);
+		UK2Node_CallArrayFunction* ArrayNode = NodeCreator.CreateNode();
+		ArrayNode->SetFromFunction(Function);
+		ArrayNode->NodePosX = PosX;
+		ArrayNode->NodePosY = PosY;
+		NodeCreator.Finalize();
+		return ArrayNode;
 	}
 
 	FGraphNodeCreator<UK2Node_CallFunction> NodeCreator(*Graph);

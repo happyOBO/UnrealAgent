@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components;
 using UnrealAgent.Backend.Agent;
 using UnrealAgent.Backend.Chat;
 using UnrealAgent.Backend.Conversation;
+using UnrealAgent.Backend.Core;
 using UnrealAgent.Backend.Security;
 
 namespace UnrealAgent.Frontend.Page;
@@ -35,6 +36,10 @@ public partial class Chat : IAsyncDisposable
         AgentSession.ClaudeSessionId = Saved.ClaudeSessionId;
         AgentSession.Mode = Saved.Mode;
         AgentRunner.Store.Restore(Saved.Messages);
+
+        // dev-block 모드면, 다음 첫 턴에 AgentLoop가 재개-넛지를 주입하도록 1회 플래그를 켭니다.
+        if (AppSettings.IsDevBlockModeEnabled())
+            AgentSession.bResumeCheckPending = true;
 
         StateHasChanged();
     }

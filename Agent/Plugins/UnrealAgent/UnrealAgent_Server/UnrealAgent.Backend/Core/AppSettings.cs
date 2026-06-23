@@ -41,4 +41,30 @@ public static class AppSettings
 
         return DefaultFrontendPort;
     }
+
+    /// <summary>
+    /// dev-block 모드 여부를 반환합니다. settings.local.json의 devBlockMode 키(bool)를 읽으며,
+    /// 키가 없거나 파일이 없으면 false입니다. 개발 단계 전용 토글로, 켜지면 에이전트가 도구 한계에
+    /// 막혔을 때 우회하지 않고 기록 후 중단합니다.
+    /// </summary>
+    public static bool IsDevBlockModeEnabled()
+    {
+        string SettingsPath = Path.Combine(AgentPaths.ConfigDir, "settings.local.json");
+
+        if (!File.Exists(SettingsPath))
+            return false;
+
+        try
+        {
+            using JsonDocument Doc = JsonDocument.Parse(File.ReadAllText(SettingsPath));
+
+            return Doc.RootElement.TryGetProperty("devBlockMode", out JsonElement Value)
+                   && Value.ValueKind == JsonValueKind.True;
+        }
+        catch
+        {
+            // 파싱 실패 시 비활성으로 폴백합니다.
+            return false;
+        }
+    }
 }
