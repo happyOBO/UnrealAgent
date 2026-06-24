@@ -13,7 +13,7 @@ namespace UnrealAgent.Backend.Model;
 public sealed class ModelSettings(ModelRegistry Registry)
 {
     /// <summary>기본 모델입니다 (저장된 설정이 없을 때 사용).</summary>
-    private static IModel DefaultModel => new Models.Opus46();
+    private static IModel DefaultModel => new Models.Opus48();
 
     /// <summary>기본 사고 깊이입니다.</summary>
     private const Effort DefaultEffort = Effort.High;

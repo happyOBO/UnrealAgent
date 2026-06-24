@@ -114,7 +114,7 @@ public:
 	static UEdGraphNode* FindNodeById(UEdGraph* Graph, const FString& NodeId);
 
 private:
-	static UEdGraphNode* CreateCallFunctionNode(UEdGraph* Graph, const FString& FunctionName, const FString& TargetClass, int32 PosX, int32 PosY, FString& OutError);
+	static UEdGraphNode* CreateCallFunctionNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& FunctionName, const FString& TargetClass, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateEventNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& EventName, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateVariableNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& VariableName, const FString& TargetClass, bool bSetter, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateBranchNode(UEdGraph* Graph, int32 PosX, int32 PosY);
@@ -125,6 +125,10 @@ private:
 	static UEdGraphNode* CreateComponentBoundEventNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& ComponentName, const FString& DelegateProperty, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateDelegateNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& NodeType, const FString& DelegateProperty, const FString& DelegateOwner, const FString& BoundFunction, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateSwitchEnumNode(UEdGraph* Graph, const FString& EnumName, int32 PosX, int32 PosY, FString& OutError);
+	/** 구조체를 멤버별 출력 핀으로 분해하는 Break 노드(bMake=false) 또는 멤버 입력으로 조립하는 Make 노드(bMake=true)를 생성합니다. */
+	static UEdGraphNode* CreateBreakMakeStructNode(UEdGraph* Graph, const FString& StructName, bool bMake, int32 PosX, int32 PosY, FString& OutError);
+	/** named/indexed 인자({0}/{Name})를 자동 생성하는 Format Text 노드를 만듭니다. */
+	static UEdGraphNode* CreateFormatTextNode(UEdGraph* Graph, const FString& FormatString, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateMacroInstanceNode(UEdGraph* Graph, const FString& MacroName, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateWidgetNode(UEdGraph* Graph, const FString& WidgetClassName, int32 PosX, int32 PosY, FString& OutError);
 	static UEdGraphNode* CreateOverrideEventNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& EventName, int32 PosX, int32 PosY, FString& OutError);

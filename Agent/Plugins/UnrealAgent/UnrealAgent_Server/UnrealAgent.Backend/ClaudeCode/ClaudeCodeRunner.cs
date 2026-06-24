@@ -288,6 +288,12 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
                     }
                     break;
 
+                case "stream_event":
+                    // --include-partial-messages로 켜진 토큰 델타. 본문 텍스트/사고를 증분 방출한다.
+                    // (완성된 assistant 메시지는 동일 텍스트를 다시 담으므로 거기선 text/thinking를 방출하지 않는다.)
+                    AppendStreamEventDelta(Root, Items);
+                    break;
+
                 case "assistant":
                     AppendAssistantBlocks(Root, Items);
                     break;
@@ -351,26 +357,46 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
             if (!Block.TryGetProperty("type", out JsonElement BtEl) || BtEl.ValueKind != JsonValueKind.String)
                 continue;
 
-            switch (BtEl.GetString())
+            // text/thinking 블록은 stream_event 델타로 이미 증분 방출했으므로 여기서 다시 방출하지 않는다
+            // (중복 누적 방지). tool_use는 델타의 부분 JSON이 취약하여 완성 메시지에서만 처리한다.
+            if (BtEl.GetString() == "tool_use")
             {
-                case "text":
-                    if (Block.TryGetProperty("text", out JsonElement TextEl) && TextEl.ValueKind == JsonValueKind.String)
-                        Items.Add(new ClaudeStreamItem.AssistantText(TextEl.GetString()!));
-                    break;
-
-                case "thinking":
-                    if (Block.TryGetProperty("thinking", out JsonElement ThEl) && ThEl.ValueKind == JsonValueKind.String)
-                        Items.Add(new ClaudeStreamItem.Thinking(ThEl.GetString()!));
-                    break;
-
-                case "tool_use":
-                    string Id = GetString(Block, "id") ?? "";
-                    string Name = GetString(Block, "name") ?? "";
-                    string InputJson = Block.TryGetProperty("input", out JsonElement InEl)
-                        ? InEl.GetRawText() : "{}";
-                    Items.Add(new ClaudeStreamItem.ToolUse(Id, Name, InputJson));
-                    break;
+                string Id = GetString(Block, "id") ?? "";
+                string Name = GetString(Block, "name") ?? "";
+                string InputJson = Block.TryGetProperty("input", out JsonElement InEl)
+                    ? InEl.GetRawText() : "{}";
+                Items.Add(new ClaudeStreamItem.ToolUse(Id, Name, InputJson));
             }
+        }
+    }
+
+    /// <summary>
+    /// stream_event(부분 메시지) 한 건에서 본문 텍스트/사고 델타를 증분 아이템으로 변환합니다.
+    /// content_block_delta의 text_delta/thinking_delta만 취하고, 나머지(input_json_delta,
+    /// signature_delta, message_*/content_block_start·stop 등)는 무시합니다.
+    /// </summary>
+    private static void AppendStreamEventDelta(JsonElement Root, List<ClaudeStreamItem> Items)
+    {
+        if (!Root.TryGetProperty("event", out JsonElement Event) || Event.ValueKind != JsonValueKind.Object)
+            return;
+
+        if (GetString(Event, "type") != "content_block_delta")
+            return;
+
+        if (!Event.TryGetProperty("delta", out JsonElement Delta) || Delta.ValueKind != JsonValueKind.Object)
+            return;
+
+        switch (GetString(Delta, "type"))
+        {
+            case "text_delta":
+                if (GetString(Delta, "text") is { Length: > 0 } Text)
+                    Items.Add(new ClaudeStreamItem.AssistantText(Text));
+                break;
+
+            case "thinking_delta":
+                if (GetString(Delta, "thinking") is { Length: > 0 } Thinking)
+                    Items.Add(new ClaudeStreamItem.Thinking(Thinking));
+                break;
         }
     }
 

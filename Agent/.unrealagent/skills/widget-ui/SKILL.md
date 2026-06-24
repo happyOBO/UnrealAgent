@@ -14,7 +14,12 @@ finish through compilation and visual verification.
 - **Widget tree (layout)** = use `widget_modify` only. Python cannot edit the WidgetTree
   because it is protected, so NEVER create widgets via execute_python.
   - `list_widgets` (read, inspect current tree) / `add_widget` / `remove_widget` /
-    `set_widget_property` (scalar/string properties only) / `reparent_widget`
+    `set_widget_property` / `reparent_widget`
+  - `set_widget_property` handles scalars/strings **and** dotted struct paths
+    (`Font.Size=48`, `Font.TypefaceFontName=Bold`) **and** layout-slot props via a `Slot.`
+    prefix (`Slot.Anchors`, `Slot.Padding`, `Slot.Alignment`), which target the widget's
+    parent-panel slot (CanvasPanelSlot/VerticalBoxSlot/…). Pass struct values in ImportText
+    form, e.g. `Slot.Anchors=(Minimum=(X=0.5,Y=0.5),Maximum=(X=0.5,Y=0.5))`.
   - `add_widget` takes `widget_type` (Button|TextBlock|VerticalBox|HorizontalBox|
     CanvasPanel|Image|ProgressBar, etc.), optional `widget_name`, optional `parent`.
     If parent is empty it becomes the root (only when the tree has no root); otherwise the
@@ -29,6 +34,14 @@ finish through compilation and visual verification.
     `UInventoryComponent`), and structs (`FVector2D`/`Vector2D`).
     (Function-graph parameters use the same op without `custom_event`.)
   - **Switch on Enum**: `add_node node_type=SwitchEnum enum=<EnumName>`.
+  - **Struct members without an accessor**: `add_node node_type=BreakStruct
+    struct_type=<StructName>` splits a struct into per-member output pins — use this to read
+    members that have no individual BP getter (e.g. `FMatchStatistics` →
+    FinalPlacement/SurvivalTime/…). **Do not add a C++ getter to work around a missing accessor.**
+    `MakeStruct` is the inverse.
+  - **Formatted text** (named-arg SetText): `add_node node_type=FormatText
+    format="MVP: {ItemName} ({Kills} kills)"` (or `"#{0}"`). Tokens auto-create argument input
+    pins; wire values in and connect the Result text into the TextBlock's SetText.
   - **Loops**: `add_node node_type=ForLoop` (or `ForEachLoop`/`WhileLoop`, or
     `MacroInstance macro=ForLoop`).
   - **Widget creation**: `add_node node_type=CreateWidget target_class=<UserWidget class>`.
@@ -53,11 +66,12 @@ finish through compilation and visual verification.
    `widget_modify list_widgets`. If not, confirm the new widget BP path (`/Game/UI/...`).
 2. **Build the layout**: Place panels (CanvasPanel/VerticalBox, etc.) first, then `add_widget`
    child widgets under them. Do not stack widgets flat without a panel.
-3. **Set properties**: For simple widget properties (text/color/alignment, etc.) use
-   `set_widget_property` (scalar/string only). Only when a widget *designer* property is a
-   struct and cannot be set via set_widget_property, give guidance on where to set it manually.
-   (Enum/struct/class parameters on the graph side are handled with `add_function_param` above,
-   so do not defer them to manual work.)
+3. **Set properties**: Use `set_widget_property` for widget properties — scalars/strings, dotted
+   struct paths (`Font.Size`, `Font.TypefaceFontName=Bold`), and layout-slot props via the
+   `Slot.` prefix (`Slot.Anchors`/`Slot.Padding`/`Slot.Alignment`). Pass struct values in
+   ImportText form. **Do not defer font/slot/struct tuning to manual work** — only fall back to
+   manual guidance if a specific property genuinely cannot be reached this way.
+   (Enum/struct/class parameters on the graph side are handled with `add_function_param` above.)
 4. **Binding/logic**: Handle clicks, value updates, loops, branches, drag-and-drop, and
    override events all with `blueprint_modify` — combine ComponentBoundEvent / custom events
    (+parameters) / SwitchEnum / ForLoop / CreateWidget / OverrideEvent. If a HOTRELOAD makes a
@@ -85,3 +99,7 @@ finish through compilation and visual verification.
   `SwitchEnum enum=EItemGrade`, and slot silhouette/number key with
   `SwitchEnum enum=EArmorSlot|EWeaponSlot`. Fill the grid with `ForLoop` + `CreateWidget`, and
   handle right-click/hover/drag with `OverrideEvent`. Complete it all with the tools.
+- Result/stats screen (WBP_MatchResult): read a stats struct that has no per-field getter via
+  `BreakStruct struct_type=<StatsStruct>`, format each TextBlock with `FormatText`
+  (`"#{0}"`, `"MVP: {ItemName} ({Kills} kills)"`), and tune layout with
+  `set_widget_property Font.Size`/`Font.TypefaceFontName=Bold` and `Slot.Anchors`/`Slot.Padding`.

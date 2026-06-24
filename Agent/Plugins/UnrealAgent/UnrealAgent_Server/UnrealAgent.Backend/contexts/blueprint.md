@@ -30,6 +30,15 @@ keywords:
     pin, so **no getter UFUNCTION is needed** (do not add C++ getters to work around this; wire the
     object into the node's Target pin via `connect_pins`). Omit `target_class` for self/inherited/
     widget-tree variables.
+  - **CallFunction on an inherited (self) function**: omit `target_class` for functions this
+    Blueprint inherits (e.g. `GetOwningPlayerState`/`GetOwningPlayer` on a UserWidget) — they
+    resolve by `function` name alone. `target_class` is only for external libraries/classes
+    (`KismetSystemLibrary`|`KismetMathLibrary`|`GameplayStatics`|`<Class>`).
+  - **Struct & text**: **BreakStruct** (`struct_type=StructName`) splits a struct into one output
+    pin per member — use to read members that have **no individual BP accessor** (e.g.
+    `FMatchStatistics` → FinalPlacement/SurvivalTime/…); **MakeStruct** (`struct_type`) is the
+    inverse. **FormatText** (`format="…{0}/{Name}…"`) auto-creates an argument input pin per
+    token; wire values in and connect the Result text into a SetText/Text pin.
   - Delegate/event binding: ComponentBoundEvent / AddDelegate / RemoveDelegate / CreateDelegate
   - Control flow / UMG: **SwitchEnum** (enum=EnumName) / **MacroInstance**
     (macro=ForLoop|ForEachLoop|WhileLoop|DoOnce|…, or the macro name directly as node_type) /

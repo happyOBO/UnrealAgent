@@ -32,12 +32,14 @@ public sealed class AgentLoop(
         <system-reminder>
         A previous session was just restored and dev-block mode is active. That prior
         session may have stopped because a native MCP tool's capability was blocked.
-        Before doing anything else: use the `Read` tool to check the most recent
-        `status: blocked` record under `.unrealagent/dev-blocked/`. If one represents
-        unfinished work, briefly summarize what was blocked (tool + operation) and ask the
-        user — in their own language — whether to resume it now that the tool may be fixed,
-        BEFORE proceeding. If there is no blocked record, just continue with the user's
-        request as normal.
+        Before doing anything else: list the TOP-LEVEL `.unrealagent/dev-blocked/` folder
+        (with `Bash`/`Glob`) and read any `status: blocked` record(s) there. EXCLUDE the
+        `.unrealagent/dev-blocked/resolved/` subfolder — those are already done. If one or
+        more open records represent unfinished work, briefly summarize what was blocked
+        (tool + operation) for each and ask the user — in their own language — whether to
+        resume now that the tool may be fixed, BEFORE proceeding. If there are no open
+        (`status: blocked`) records at the top level, just continue with the user's request
+        as normal.
         </system-reminder>
         """;
 
@@ -102,6 +104,11 @@ public sealed class AgentLoop(
         // 턴 내 마지막 어시스턴트 메시지의 컨텍스트 총량 (현재 컨텍스트 크기).
         long LastContextTokens = 0;
 
+        // 이번 턴에 사용자에게 보일 산출물(텍스트/도구 호출)이 하나라도 방출됐는지 추적합니다.
+        // 스트리밍 콘텐츠 없이 result만으로 끝나는 턴(빈 응답/에러 result/resume 실패)에서
+        // 사용자가 "왜 답장이 없는지" 알 수 있도록, result 처리 시 이 플래그로 분기합니다.
+        bool bProducedOutput = false;
+
         await using ClaudeCodeRunner Runner = new(CliPath);
 
         await foreach (ClaudeStreamItem Item in Runner.RunAsync(Options, Input, Ct))
@@ -113,6 +120,7 @@ public sealed class AgentLoop(
                     break;
 
                 case ClaudeStreamItem.AssistantText Text:
+                    bProducedOutput = true;
                     yield return new ChatEvent.Assistant(Text.Text);
                     break;
 
@@ -125,6 +133,7 @@ public sealed class AgentLoop(
                     break;
 
                 case ClaudeStreamItem.ToolUse Tool:
+                    bProducedOutput = true;
                     ToolNames[Tool.Id] = Tool.Name;
                     yield return new ChatEvent.ToolStart(Tool.Id, Tool.Name, Tool.InputJson);
                     break;
@@ -157,6 +166,23 @@ public sealed class AgentLoop(
                 }
 
                 case ClaudeStreamItem.Result Done:
+                    // 스트리밍 콘텐츠 없이 result만으로 끝난 턴은 사용자에게 침묵으로 보입니다.
+                    // (resume 실패/에러 result/빈 응답 등) result의 IsError/Text를 표면화하여
+                    // "버튼만 돌다 답장 없음"을 없애고 상위 원인을 그대로 노출합니다.
+                    if (Done.IsError)
+                    {
+                        yield return new ChatEvent.System(string.IsNullOrWhiteSpace(Done.Text)
+                            ? "에이전트가 오류로 턴을 종료했습니다(빈 응답)."
+                            : Done.Text);
+                    }
+                    else if (!bProducedOutput)
+                    {
+                        yield return string.IsNullOrWhiteSpace(Done.Text)
+                            ? new ChatEvent.System(
+                                "응답 없이 턴이 종료되었습니다. (--resume 세션 상태 또는 모델 빈 응답)")
+                            : new ChatEvent.Assistant(Done.Text);
+                    }
+
                     // 컨텍스트 총량은 result의 누적 usage가 아니라 마지막 어시스턴트 메시지의 값을 사용합니다.
                     yield return new ChatEvent.Usage(LastContextTokens, Done.OutputTokens, Done.CostUsd);
                     yield return new ChatEvent.Done();

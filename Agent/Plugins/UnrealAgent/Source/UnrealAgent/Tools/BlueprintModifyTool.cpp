@@ -21,8 +21,9 @@ FString FBlueprintModifyTool::ToolDescription() const
 		"- add_node: node_type + node fields, [pos_x], [pos_y], [graph_name], [is_function_graph]\n"
 		"    node_type = CallFunction | Event | OverrideEvent | VariableGet | VariableSet | Branch | Sequence\n"
 		"              | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate\n"
-		"              | SwitchEnum | CreateWidget | MacroInstance | ForLoop | ForEachLoop | WhileLoop\n"
-		"    CallFunction: function, [target_class] (KismetSystemLibrary|KismetMathLibrary|GameplayStatics|<Class>)\n"
+		"              | SwitchEnum | BreakStruct | MakeStruct | FormatText | CreateWidget | MacroInstance | ForLoop | ForEachLoop | WhileLoop\n"
+		"    CallFunction: function, [target_class] (KismetSystemLibrary|KismetMathLibrary|GameplayStatics|<Class>).\n"
+		"        Omit target_class for functions inherited by THIS blueprint (self), e.g. GetOwningPlayerState/GetOwningPlayer on a UserWidget.\n"
 		"    Event: event (BeginPlay|Tick|EndPlay|<ParentFunc>)\n"
 		"    OverrideEvent: event (parent function/event to override, e.g. OnMouseButtonDown, OnDragDetected, OnDrop, OnMouseEnter).\n"
 		"        Events with a return/out value (OnMouseButtonDown→FEventReply, OnDrop→bool, OnDragDetected→out Operation)\n"
@@ -35,6 +36,10 @@ FString FBlueprintModifyTool::ToolDescription() const
 		"    Cast: target_class (class to cast to, e.g. PlayerController)\n"
 		"    CustomEvent: event (the new custom event name). Add its params with add_function_param custom_event=<name>.\n"
 		"    SwitchEnum: enum (enum type to switch on, e.g. EWeaponSlot) — replaces the manual 'Switch on Enum' node.\n"
+		"    BreakStruct: struct_type (e.g. MatchStatistics) — splits a struct into one output pin per member. Use to read members\n"
+		"        that have no individual BP accessor. MakeStruct: struct_type — inverse (one input pin per member, single struct out).\n"
+		"    FormatText: format (e.g. \"MVP: {ItemName} ({Kills} kills)\" or \"#{0}\") — {token} args auto-create input pins;\n"
+		"        wire values into them and connect the Result text into a SetText/Text pin.\n"
 		"    CreateWidget: target_class (UserWidget class to construct). Wire its Class/return pins via connect_pins.\n"
 		"    MacroInstance: macro (ForLoop|ForEachLoop|WhileLoop|DoOnce|Gate|...). Shortcut: pass the macro name directly as node_type.\n"
 		"    FunctionResult: (function graph only; pairs with add_function_param output)\n"
@@ -191,6 +196,8 @@ FMcpResponse FBlueprintModifyTool::Execute()
 		if (!BoundFunction.IsEmpty())     NodeParams->SetStringField(TEXT("bound_function"), BoundFunction);
 		if (!Enum.IsEmpty())              NodeParams->SetStringField(TEXT("enum"), Enum);
 		if (!Macro.IsEmpty())             NodeParams->SetStringField(TEXT("macro"), Macro);
+		if (!StructType.IsEmpty())        NodeParams->SetStringField(TEXT("struct_type"), StructType);
+		if (!Format.IsEmpty())            NodeParams->SetStringField(TEXT("format"), Format);
 
 		FString OutNodeId;
 		UEdGraphNode* Node = FBlueprintGraphEditor::CreateNode(Graph, Blueprint, NodeType, NodeParams, PosX, PosY, OutNodeId, Error);

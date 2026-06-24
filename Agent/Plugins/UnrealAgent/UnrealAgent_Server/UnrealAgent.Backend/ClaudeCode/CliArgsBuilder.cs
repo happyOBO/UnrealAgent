@@ -21,6 +21,9 @@ public static class CliArgsBuilder
             "--input-format", "stream-json",
             "--output-format", "stream-json",
             "--verbose",
+            // 토큰 델타(stream_event) 방출: 긴 응답 생성 중에도 stdout이 계속 흘러
+            // 유휴 워치독이 "정상 작성"을 "멈춤"으로 오판하지 않게 하고, UI에 실시간 스트리밍을 제공한다.
+            "--include-partial-messages",
             // 권한 control 프로토콜 활성화 (이게 없으면 도구가 자동 거부됨)
             "--permission-prompt-tool", "stdio",
             // 권한 모드 (Normal/Edit/Plan 매핑)

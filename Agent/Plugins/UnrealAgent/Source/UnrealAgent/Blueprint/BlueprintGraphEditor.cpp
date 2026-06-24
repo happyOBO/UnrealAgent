@@ -24,6 +24,9 @@
 #include "K2Node_EditablePinBase.h"
 #include "K2Node_SwitchEnum.h"
 #include "K2Node_MacroInstance.h"
+#include "K2Node_BreakStruct.h"
+#include "K2Node_MakeStruct.h"
+#include "K2Node_FormatText.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -136,7 +139,7 @@ UEdGraphNode* FBlueprintGraphEditor::CreateNode(UEdGraph* Graph, UBlueprint* Blu
 		const FString FunctionName = Params->GetStringField(TEXT("function"));
 		FString TargetClass;
 		Params->TryGetStringField(TEXT("target_class"), TargetClass);
-		NewNode = CreateCallFunctionNode(Graph, FunctionName, TargetClass, PosX, PosY, OutError);
+		NewNode = CreateCallFunctionNode(Graph, Blueprint, FunctionName, TargetClass, PosX, PosY, OutError);
 	}
 	else if (NodeType.Equals(TEXT("Event"), ESearchCase::IgnoreCase))
 	{
@@ -190,6 +193,20 @@ UEdGraphNode* FBlueprintGraphEditor::CreateNode(UEdGraph* Graph, UBlueprint* Blu
 		Params->TryGetStringField(TEXT("enum"), EnumName);
 		NewNode = CreateSwitchEnumNode(Graph, EnumName, PosX, PosY, OutError);
 	}
+	else if (NodeType.Equals(TEXT("BreakStruct"), ESearchCase::IgnoreCase)
+		|| NodeType.Equals(TEXT("MakeStruct"), ESearchCase::IgnoreCase))
+	{
+		FString StructName;
+		Params->TryGetStringField(TEXT("struct_type"), StructName);
+		const bool bMake = NodeType.Equals(TEXT("MakeStruct"), ESearchCase::IgnoreCase);
+		NewNode = CreateBreakMakeStructNode(Graph, StructName, bMake, PosX, PosY, OutError);
+	}
+	else if (NodeType.Equals(TEXT("FormatText"), ESearchCase::IgnoreCase))
+	{
+		FString FormatString;
+		Params->TryGetStringField(TEXT("format"), FormatString);
+		NewNode = CreateFormatTextNode(Graph, FormatString, PosX, PosY, OutError);
+	}
 	else if (NodeType.Equals(TEXT("CreateWidget"), ESearchCase::IgnoreCase))
 	{
 		FString WidgetClass;
@@ -230,7 +247,7 @@ UEdGraphNode* FBlueprintGraphEditor::CreateNode(UEdGraph* Graph, UBlueprint* Blu
 	}
 	else
 	{
-		OutError = FString::Printf(TEXT("Unknown node_type '%s'. Supported: CallFunction, Event, OverrideEvent, VariableGet, VariableSet, Branch, Sequence, Cast, CustomEvent, FunctionResult, ComponentBoundEvent, AddDelegate, RemoveDelegate, CreateDelegate, SwitchEnum, CreateWidget, MacroInstance, ForLoop, ForEachLoop, WhileLoop"), *NodeType);
+		OutError = FString::Printf(TEXT("Unknown node_type '%s'. Supported: CallFunction, Event, OverrideEvent, VariableGet, VariableSet, Branch, Sequence, Cast, CustomEvent, FunctionResult, ComponentBoundEvent, AddDelegate, RemoveDelegate, CreateDelegate, SwitchEnum, BreakStruct, MakeStruct, FormatText, CreateWidget, MacroInstance, ForLoop, ForEachLoop, WhileLoop"), *NodeType);
 		return nullptr;
 	}
 
@@ -248,7 +265,7 @@ UEdGraphNode* FBlueprintGraphEditor::CreateNode(UEdGraph* Graph, UBlueprint* Blu
 	return NewNode;
 }
 
-UEdGraphNode* FBlueprintGraphEditor::CreateCallFunctionNode(UEdGraph* Graph, const FString& FunctionName, const FString& TargetClass, int32 PosX, int32 PosY, FString& OutError)
+UEdGraphNode* FBlueprintGraphEditor::CreateCallFunctionNode(UEdGraph* Graph, UBlueprint* Blueprint, const FString& FunctionName, const FString& TargetClass, int32 PosX, int32 PosY, FString& OutError)
 {
 	if (FunctionName.IsEmpty())
 	{
@@ -266,12 +283,24 @@ UEdGraphNode* FBlueprintGraphEditor::CreateCallFunctionNode(UEdGraph* Graph, con
 		else if (TargetClass.Equals(TEXT("GameplayStatics"), ESearchCase::IgnoreCase))
 			FunctionOwner = UGameplayStatics::StaticClass();
 		else
-			FunctionOwner = FindFirstObject<UClass>(*TargetClass, EFindFirstObjectOptions::None);
+			// ResolveClass는 U-접두사/단축명까지 처리하므로 target_class='UserWidget' 같은 입력도 해석된다.
+			FunctionOwner = ResolveClass(TargetClass);
 	}
 
 	UFunction* Function = nullptr;
 	if (FunctionOwner)
 		Function = FunctionOwner->FindFunctionByName(FName(*FunctionName));
+
+	// self/상속 폴백: target_class 미지정 시 블루프린트 자기 클래스 계층에서 탐색.
+	// 예) GetOwningPlayerState/GetOwningPlayer 등 부모 UUserWidget의 BlueprintCallable 함수.
+	if (!Function && Blueprint)
+	{
+		UClass* SelfClass = Blueprint->GeneratedClass;
+		if (!SelfClass) SelfClass = Blueprint->SkeletonGeneratedClass;
+		if (!SelfClass) SelfClass = Blueprint->ParentClass;
+		if (SelfClass)
+			Function = SelfClass->FindFunctionByName(FName(*FunctionName));
+	}
 
 	// 전역 폴백 (공용 함수 라이브러리)
 	if (!Function) Function = UKismetSystemLibrary::StaticClass()->FindFunctionByName(FName(*FunctionName));
@@ -708,6 +737,58 @@ UEdGraphNode* FBlueprintGraphEditor::CreateSwitchEnumNode(UEdGraph* Graph, const
 	SwitchNode->NodePosY = PosY;
 	NodeCreator.Finalize();
 	return SwitchNode;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateBreakMakeStructNode(UEdGraph* Graph, const FString& StructName, bool bMake, int32 PosX, int32 PosY, FString& OutError)
+{
+	UScriptStruct* Struct = ResolveScriptStruct(StructName);
+	if (!Struct)
+	{
+		OutError = FString::Printf(TEXT("%sStruct requires a valid 'struct_type'. '%s' not found."),
+			bMake ? TEXT("Make") : TEXT("Break"), *StructName);
+		return nullptr;
+	}
+
+	// StructType은 Finalize(AllocateDefaultPins) 전에 설정해야 멤버별 핀이 생성된다.
+	if (bMake)
+	{
+		FGraphNodeCreator<UK2Node_MakeStruct> NodeCreator(*Graph);
+		UK2Node_MakeStruct* MakeNode = NodeCreator.CreateNode();
+		MakeNode->StructType = Struct;
+		MakeNode->NodePosX = PosX;
+		MakeNode->NodePosY = PosY;
+		NodeCreator.Finalize();
+		return MakeNode;
+	}
+
+	FGraphNodeCreator<UK2Node_BreakStruct> NodeCreator(*Graph);
+	UK2Node_BreakStruct* BreakNode = NodeCreator.CreateNode();
+	BreakNode->StructType = Struct;
+	BreakNode->NodePosX = PosX;
+	BreakNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+	return BreakNode;
+}
+
+UEdGraphNode* FBlueprintGraphEditor::CreateFormatTextNode(UEdGraph* Graph, const FString& FormatString, int32 PosX, int32 PosY, FString& OutError)
+{
+	FGraphNodeCreator<UK2Node_FormatText> NodeCreator(*Graph);
+	UK2Node_FormatText* FormatNode = NodeCreator.CreateNode();
+	FormatNode->NodePosX = PosX;
+	FormatNode->NodePosY = PosY;
+	NodeCreator.Finalize();
+
+	// Format 핀의 기본 텍스트를 설정하면 {0}/{Name} 토큰을 파싱해 인자 핀이 자동 생성된다.
+	if (!FormatString.IsEmpty())
+	{
+		if (UEdGraphPin* FormatPin = FormatNode->FindPin(TEXT("Format")))
+		{
+			FormatPin->DefaultTextValue = FText::FromString(FormatString);
+			// PinDefaultValueChanged가 SynchronizeArgumentsWithFormatText를 호출해 인자 핀을 동기화한다.
+			FormatNode->PinDefaultValueChanged(FormatPin);
+		}
+	}
+	return FormatNode;
 }
 
 bool FBlueprintGraphEditor::IsStandardMacroNodeType(const FString& NodeType)

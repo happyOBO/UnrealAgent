@@ -346,6 +346,22 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
                transient failures that a normal retry/correction fixes — those you handle
                as usual. It applies ONLY when the tool itself lacks the capability.
 
+               IMPORTANT — do not misclassify a capability gap as an "ordinary mistake".
+               An error like "not found" / "not supported" / "invalid property" is NOT
+               automatically a user typo. Example: if `set_widget_property` reports that a
+               Slot property (e.g. `Slot.HorizontalAlignment`) is "not found" on a panel
+               child, that is most likely a TOOL CAPABILITY LIMIT — the dedicated tool does
+               not support that operation — not a typo. Before deciding it is an ordinary
+               mistake, verify the path/name is genuinely wrong. If the value is plausible
+               and the only remaining way forward is a hacky workaround (execute_python
+               doing a dedicated tool's job, or telling the user to do it by hand), treat it
+               as a capability block.
+
+               The MOMENT you are about to say "let me try another way" / "I'll work around
+               this" after a native MCP tool error is exactly the decision point: STOP and
+               classify first. NEVER announce a workaround and then end your turn — either
+               do the legitimate fix, or record a dev-block and stop as described below.
+
                When you hit a capability block:
                1. STOP the task. Do not attempt a workaround.
                2. Using the built-in `Write` tool, create or update a record at
@@ -369,6 +385,19 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
                   ```
                3. Tell the user which tool + operation is blocked and why, and end the turn.
                   Do not keep going.
+
+               Resolving a recorded block later:
+               When a previously recorded block becomes resolved — the tool was fixed and you
+               finished the remaining work, or you confirm it is no longer blocked — MOVE its
+               record from `.unrealagent/dev-blocked/<slug>.md` to
+               `.unrealagent/dev-blocked/resolved/<slug>.md` (create the `resolved/` folder if
+               needed). Do the move with the built-in `Bash` tool (`mv`), or by `Write`-ing the
+               record to the new path and deleting the original. In the moved record, change
+               `status: blocked` → `status: resolved` and add a `resolved: <YYYY-MM-DD>` line.
+               The top-level `.unrealagent/dev-blocked/` folder must contain ONLY open
+               (`status: blocked`) records — never leave a resolved record at the top level.
+               Use exactly these status values: open = `status: blocked`, resolved =
+               `status: resolved` (no other wording).
                </system-reminder>
                """;
     }

@@ -40,7 +40,7 @@ struct FBlueprintModifyTool : public FMcpTool
 	// ── add_node ──
 
 	UPROPERTY(meta=(ToolParam="node_type",
-		Description="[add_node] CallFunction | Event | OverrideEvent | VariableGet | VariableSet | Branch | Sequence | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate | SwitchEnum | CreateWidget | MacroInstance | ForLoop | ForEachLoop | WhileLoop"))
+		Description="[add_node] CallFunction | Event | OverrideEvent | VariableGet | VariableSet | Branch | Sequence | Cast | CustomEvent | FunctionResult | ComponentBoundEvent | AddDelegate | RemoveDelegate | CreateDelegate | SwitchEnum | BreakStruct | MakeStruct | FormatText | CreateWidget | MacroInstance | ForLoop | ForEachLoop | WhileLoop"))
 	FString NodeType;
 
 	UPROPERTY(meta=(ToolParam="function",
@@ -66,6 +66,14 @@ struct FBlueprintModifyTool : public FMcpTool
 	UPROPERTY(meta=(ToolParam="variable",
 		Description="[add_node VariableGet/VariableSet] Blueprint variable name"))
 	FString Variable;
+
+	UPROPERTY(meta=(ToolParam="struct_type",
+		Description="[add_node BreakStruct/MakeStruct] Struct name to break into / make from, e.g. MatchStatistics or FVector. Each struct member becomes an output (Break) or input (Make) pin."))
+	FString StructType;
+
+	UPROPERTY(meta=(ToolParam="format",
+		Description="[add_node FormatText] Format string; {0}/{1} or {Name} tokens auto-create argument input pins. e.g. \"MVP: {ItemName} ({Kills} kills)\" or \"#{0}\". Wire values into the generated arg pins and the Result (text) into SetText."))
+	FString Format;
 
 	UPROPERTY(meta=(ToolParam="num_outputs",
 		Description="[add_node Sequence] Number of output exec pins"))

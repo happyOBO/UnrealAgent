@@ -5,6 +5,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Widget.h"
 #include "Components/PanelWidget.h"
+#include "Components/PanelSlot.h"
 
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Dom/JsonObject.h"
@@ -134,27 +135,86 @@ bool FWidgetTreeEditor::RemoveWidget(UWidgetBlueprint* WidgetBP, const FString& 
 	return true;
 }
 
+namespace
+{
+	// 점(.)으로 구분된 프로퍼티 경로를 따라 중첩 struct를 내려가, 말단 프로퍼티에 값을 ImportText 한다.
+	// 예) "Font.Size" → 위젯의 FSlateFontInfo Font 안의 Size; "Anchors" → 평면 단일 토큰.
+	// 중간 토큰은 FStructProperty여야 한다(struct 체인만 지원). OwnerObject는 ImportText의 컨텍스트.
+	bool ApplyPropertyPath(UStruct* OwnerStruct, void* Container, UObject* OwnerObject,
+		const FString& Path, const FString& Value, FString& OutError)
+	{
+		TArray<FString> Tokens;
+		Path.ParseIntoArray(Tokens, TEXT("."), /*CullEmpty*/true);
+		if (Tokens.Num() == 0) { OutError = TEXT("Empty property path."); return false; }
+
+		UStruct* CurrentStruct = OwnerStruct;
+		void* CurrentContainer = Container;
+
+		// 중간 토큰: struct 프로퍼티를 따라 내려간다.
+		for (int32 i = 0; i < Tokens.Num() - 1; ++i)
+		{
+			FProperty* Prop = FindFProperty<FProperty>(CurrentStruct, FName(*Tokens[i]));
+			if (!Prop)
+			{
+				OutError = FString::Printf(TEXT("Property '%s' not found on '%s'."), *Tokens[i], *CurrentStruct->GetName());
+				return false;
+			}
+			FStructProperty* StructProp = CastField<FStructProperty>(Prop);
+			if (!StructProp)
+			{
+				OutError = FString::Printf(TEXT("Property '%s' is not a struct; cannot descend into '%s'."), *Tokens[i], *Path);
+				return false;
+			}
+			CurrentContainer = StructProp->ContainerPtrToValuePtr<void>(CurrentContainer);
+			CurrentStruct = StructProp->Struct;
+		}
+
+		// 말단 토큰: 값 설정.
+		const FString& Leaf = Tokens.Last();
+		FProperty* LeafProp = FindFProperty<FProperty>(CurrentStruct, FName(*Leaf));
+		if (!LeafProp)
+		{
+			OutError = FString::Printf(TEXT("Property '%s' not found on '%s'."), *Leaf, *CurrentStruct->GetName());
+			return false;
+		}
+		void* ValuePtr = LeafProp->ContainerPtrToValuePtr<void>(CurrentContainer);
+		const TCHAR* Result = LeafProp->ImportText_Direct(*Value, ValuePtr, OwnerObject, PPF_None);
+		if (Result == nullptr)
+		{
+			OutError = FString::Printf(TEXT("Failed to parse value '%s' for property '%s'."), *Value, *Path);
+			return false;
+		}
+		return true;
+	}
+}
+
 bool FWidgetTreeEditor::SetWidgetProperty(UWidgetBlueprint* WidgetBP, const FString& WidgetName, const FString& PropertyName,
 	const FString& Value, FString& OutError)
 {
 	UWidget* Widget = FindWidgetByName(WidgetBP, WidgetName);
 	if (!Widget) { OutError = FString::Printf(TEXT("Widget '%s' not found."), *WidgetName); return false; }
 
-	FProperty* Property = FindFProperty<FProperty>(Widget->GetClass(), FName(*PropertyName));
-	if (!Property)
+	// "Slot." 접두사: 대상은 위젯이 아니라 Widget->Slot(UPanelSlot*, 부모 패널 종류에 따라 Canvas/VerticalBox 등).
+	if (PropertyName.StartsWith(TEXT("Slot.")))
 	{
-		OutError = FString::Printf(TEXT("Property '%s' not found on '%s'."), *PropertyName, *Widget->GetClass()->GetName());
-		return false;
+		UPanelSlot* Slot = Widget->Slot;
+		if (!Slot)
+		{
+			OutError = FString::Printf(TEXT("Widget '%s' has no Slot (not parented to a panel)."), *WidgetName);
+			return false;
+		}
+		const FString SlotPath = PropertyName.RightChop(5); // "Slot." 제거
+		Slot->Modify();
+		if (!ApplyPropertyPath(Slot->GetClass(), Slot, Slot, SlotPath, Value, OutError))
+			return false;
+		FBlueprintEditorUtils::MarkBlueprintAsModified(WidgetBP);
+		return true;
 	}
 
+	// 평면 또는 struct 중첩 경로(예: Font.Size) — 위젯을 컨테이너로 워킹.
 	Widget->Modify();
-	void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Widget);
-	const TCHAR* Result = Property->ImportText_Direct(*Value, ValuePtr, Widget, PPF_None);
-	if (Result == nullptr)
-	{
-		OutError = FString::Printf(TEXT("Failed to parse value '%s' for property '%s'."), *Value, *PropertyName);
+	if (!ApplyPropertyPath(Widget->GetClass(), Widget, Widget, PropertyName, Value, OutError))
 		return false;
-	}
 
 	FBlueprintEditorUtils::MarkBlueprintAsModified(WidgetBP);
 	return true;
