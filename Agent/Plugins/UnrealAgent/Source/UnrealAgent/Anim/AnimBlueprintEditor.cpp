@@ -17,14 +17,22 @@
 #include "AnimGraphNode_Slot.h"
 #include "AnimGraphNode_LayeredBoneBlend.h"
 #include "AnimGraphNode_RotationOffsetBlendSpace.h"
+#include "AnimGraphNode_Base.h"
+#include "AnimGraphNode_ModifyBone.h"
 #include "Animation/AimOffsetBlendSpace.h"
+#include "Animation/AnimTypes.h"
 #include "AnimStateNode.h"
+#include "AnimStateNodeBase.h"
 #include "AnimStateTransitionNode.h"
 #include "AnimStateEntryNode.h"
+
+#include "Blueprint/BlueprintGraphEditor.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
+#include "EdGraph/EdGraphSchema.h"
+#include "Dom/JsonObject.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "UObject/UObjectGlobals.h"
@@ -466,6 +474,49 @@ bool FAnimBlueprintEditor::AddAimOffsetNode(UAnimBlueprint* AnimBP, const FStrin
 	return true;
 }
 
+bool FAnimBlueprintEditor::AddModifyBoneNode(UAnimBlueprint* AnimBP, const FString& BoneName, const FString& RotationMode, const FString& RotationSpace,
+	int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError)
+{
+	UEdGraph* AnimGraph = FindAnimGraph(AnimBP, OutError);
+	if (!AnimGraph) return false;
+
+	if (BoneName.IsEmpty()) { OutError = TEXT("add_modify_bone requires 'bone'"); return false; }
+
+	// RotationMode 파싱 (기본 Add: 기존 회전에 더함 — 스파인 트위스트 기본값).
+	EBoneModificationMode RotMode = BMM_Additive;
+	if (!RotationMode.IsEmpty())
+	{
+		if (RotationMode.Equals(TEXT("Ignore"), ESearchCase::IgnoreCase)) RotMode = BMM_Ignore;
+		else if (RotationMode.Equals(TEXT("Replace"), ESearchCase::IgnoreCase)) RotMode = BMM_Replace;
+		else if (RotationMode.Equals(TEXT("Add"), ESearchCase::IgnoreCase) || RotationMode.Equals(TEXT("Additive"), ESearchCase::IgnoreCase)) RotMode = BMM_Additive;
+		else { OutError = FString::Printf(TEXT("Invalid rotation_mode '%s' (use Ignore|Replace|Add)"), *RotationMode); return false; }
+	}
+
+	// RotationSpace 파싱 (기본 Component: 컴포넌트 스페이스 회전).
+	EBoneControlSpace RotSpace = BCS_ComponentSpace;
+	if (!RotationSpace.IsEmpty())
+	{
+		if (RotationSpace.Equals(TEXT("World"), ESearchCase::IgnoreCase) || RotationSpace.Equals(TEXT("WorldSpace"), ESearchCase::IgnoreCase)) RotSpace = BCS_WorldSpace;
+		else if (RotationSpace.Equals(TEXT("Component"), ESearchCase::IgnoreCase) || RotationSpace.Equals(TEXT("ComponentSpace"), ESearchCase::IgnoreCase)) RotSpace = BCS_ComponentSpace;
+		else if (RotationSpace.Equals(TEXT("Parent"), ESearchCase::IgnoreCase) || RotationSpace.Equals(TEXT("ParentBoneSpace"), ESearchCase::IgnoreCase)) RotSpace = BCS_ParentBoneSpace;
+		else if (RotationSpace.Equals(TEXT("Bone"), ESearchCase::IgnoreCase) || RotationSpace.Equals(TEXT("BoneSpace"), ESearchCase::IgnoreCase)) RotSpace = BCS_BoneSpace;
+		else { OutError = FString::Printf(TEXT("Invalid rotation_space '%s' (use World|Component|Parent|Bone)"), *RotationSpace); return false; }
+	}
+
+	FGraphNodeCreator<UAnimGraphNode_ModifyBone> NodeCreator(*AnimGraph);
+	UAnimGraphNode_ModifyBone* ModNode = NodeCreator.CreateNode();
+	ModNode->NodePosX = PosX;
+	ModNode->NodePosY = PosY;
+	ModNode->Node.BoneToModify.BoneName = FName(*BoneName);
+	ModNode->Node.RotationMode = RotMode;
+	ModNode->Node.RotationSpace = RotSpace;
+	NodeCreator.Finalize();
+
+	OutNodeId = ModNode->NodeGuid.ToString();
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
+	return true;
+}
+
 bool FAnimBlueprintEditor::ConnectAnimNodes(UAnimBlueprint* AnimBP, const FString& FromNodeId, const FString& FromPin, const FString& ToNodeId, const FString& ToPin, FString& OutError)
 {
 	UEdGraph* AnimGraph = FindAnimGraph(AnimBP, OutError);
@@ -495,8 +546,179 @@ bool FAnimBlueprintEditor::ConnectAnimNodes(UAnimBlueprint* AnimBP, const FStrin
 	if (!OutPin) { OutError = FString::Printf(TEXT("Source output pin not found (%s)"), *FromPin); return false; }
 	if (!InPin) { OutError = FString::Printf(TEXT("Target input pin not found (%s)"), *ToPin); return false; }
 
-	InPin->BreakAllPinLinks();
-	OutPin->MakeLinkTo(InPin);
+	// 스키마 경로로 연결합니다. 에디터 드래그와 동일하게:
+	// (a) 로컬↔컴포넌트 포즈 스페이스 불일치 시 변환 노드(Local/Component-To-...)를 자동 삽입,
+	// (b) 단일 부모 포즈 입력의 기존 링크를 자동 교체(BREAK_OTHERS)합니다.
+	const UEdGraphSchema* Schema = AnimGraph->GetSchema();
+	if (!Schema) { OutError = TEXT("AnimGraph schema missing"); return false; }
+
+	const FPinConnectionResponse Resp = Schema->CanCreateConnection(OutPin, InPin);
+	if (Resp.Response == CONNECT_RESPONSE_DISALLOW)
+	{
+		OutError = FString::Printf(TEXT("Cannot connect pins: %s"), *Resp.Message.ToString());
+		return false;
+	}
+	if (!Schema->TryCreateConnection(OutPin, InPin))
+	{
+		OutError = FString::Printf(TEXT("Failed to connect %s -> %s"), *OutPin->PinName.ToString(), *InPin->PinName.ToString());
+		return false;
+	}
+
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
+	return true;
+}
+
+//-----------------------------------------------------------------------------
+// 서브그래프 범용 편집 (전이 조건 그래프 / 메인 AnimGraph)
+//-----------------------------------------------------------------------------
+
+UAnimStateTransitionNode* FAnimBlueprintEditor::FindTransitionNode(UAnimGraphNode_StateMachine* SM, const FString& FromState, const FString& ToState)
+{
+	UEdGraph* SMGraph = GetStateMachineGraph(SM);
+	if (!SMGraph) return nullptr;
+	for (UEdGraphNode* Node : SMGraph->Nodes)
+	{
+		UAnimStateTransitionNode* Trans = Cast<UAnimStateTransitionNode>(Node);
+		if (!Trans) continue;
+		UAnimStateNodeBase* Prev = Trans->GetPreviousState();
+		UAnimStateNodeBase* Next = Trans->GetNextState();
+		if (Prev && Next
+			&& Prev->GetStateName().Equals(FromState, ESearchCase::IgnoreCase)
+			&& Next->GetStateName().Equals(ToState, ESearchCase::IgnoreCase))
+			return Trans;
+	}
+	return nullptr;
+}
+
+UEdGraph* FAnimBlueprintEditor::ResolveTargetGraph(UAnimBlueprint* AnimBP, const FString& StateMachine, const FString& FromState, const FString& ToState, FString& OutError)
+{
+	// from/to 모두 비어있으면 메인 AnimGraph를 대상으로 합니다.
+	if (FromState.IsEmpty() && ToState.IsEmpty())
+		return FindAnimGraph(AnimBP, OutError);
+
+	if (StateMachine.IsEmpty() || FromState.IsEmpty() || ToState.IsEmpty())
+	{
+		OutError = TEXT("Transition target requires 'state_machine', 'from_state', and 'to_state' (omit all to target the main AnimGraph)");
+		return nullptr;
+	}
+
+	UAnimGraphNode_StateMachine* SM = FindStateMachine(AnimBP, StateMachine, OutError);
+	if (!SM) return nullptr;
+
+	UAnimStateTransitionNode* Trans = FindTransitionNode(SM, FromState, ToState);
+	if (!Trans)
+	{
+		OutError = FString::Printf(TEXT("Transition '%s' -> '%s' not found in state machine '%s'"), *FromState, *ToState, *StateMachine);
+		return nullptr;
+	}
+
+	UEdGraph* CondGraph = Trans->GetBoundGraph();
+	if (!CondGraph) { OutError = TEXT("Transition condition graph missing"); return nullptr; }
+	return CondGraph;
+}
+
+bool FAnimBlueprintEditor::ExposeNodePin(UAnimBlueprint* AnimBP, const FString& NodeId, const FString& PropertyName, bool bExpose, FString& OutError)
+{
+	UEdGraph* AnimGraph = FindAnimGraph(AnimBP, OutError);
+	if (!AnimGraph) return false;
+
+	UEdGraphNode* Node = FindNodeById(AnimGraph, NodeId);
+	if (!Node) { OutError = FString::Printf(TEXT("Node '%s' not found in AnimGraph"), *NodeId); return false; }
+
+	UAnimGraphNode_Base* AnimNode = Cast<UAnimGraphNode_Base>(Node);
+	if (!AnimNode) { OutError = TEXT("Node is not an AnimGraph node (no optional pins)"); return false; }
+
+	bool bFound = false;
+	for (FOptionalPinFromProperty& Opt : AnimNode->ShowPinForProperties)
+	{
+		if (Opt.PropertyName == FName(*PropertyName))
+		{
+			Opt.bShowPin = bExpose;
+			bFound = true;
+			break;
+		}
+	}
+	if (!bFound)
+	{
+		OutError = FString::Printf(TEXT("Property '%s' is not an exposable pin on this node. AimOffset uses 'X' (Yaw) and 'Y' (Pitch)."), *PropertyName);
+		return false;
+	}
+
+	// 핀 노출 토글은 노드 재구성으로 그래프 핀에 반영됩니다.
+	AnimNode->ReconstructNode();
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
+	return true;
+}
+
+bool FAnimBlueprintEditor::AddGraphNode(UAnimBlueprint* AnimBP, const FString& NodeType, const TSharedPtr<FJsonObject>& NodeParams,
+	const FString& StateMachine, const FString& FromState, const FString& ToState, int32 PosX, int32 PosY, FString& OutNodeId, FString& OutError)
+{
+	UEdGraph* Target = ResolveTargetGraph(AnimBP, StateMachine, FromState, ToState, OutError);
+	if (!Target) return false;
+
+	UEdGraphNode* Node = FBlueprintGraphEditor::CreateNode(Target, AnimBP, NodeType, NodeParams, PosX, PosY, OutNodeId, OutError);
+	return Node != nullptr;
+}
+
+bool FAnimBlueprintEditor::ConnectGraphPins(UAnimBlueprint* AnimBP, const FString& FromNodeId, const FString& FromPin,
+	const FString& ToNodeId, const FString& ToPin, const FString& StateMachine, const FString& FromState, const FString& ToState, FString& OutError)
+{
+	UEdGraph* Target = ResolveTargetGraph(AnimBP, StateMachine, FromState, ToState, OutError);
+	if (!Target) return false;
+
+	FString ResolvedToNodeId = ToNodeId;
+	FString ResolvedToPin = ToPin;
+
+	// 'result'/'output' 별칭은 전이 조건 결과 노드(bCanEnterTransition)로 해석합니다.
+	if (ToNodeId.Equals(TEXT("result"), ESearchCase::IgnoreCase) || ToNodeId.Equals(TEXT("output"), ESearchCase::IgnoreCase))
+	{
+		UEdGraphNode* ResultNode = nullptr;
+		for (UEdGraphNode* Node : Target->Nodes)
+		{
+			if (Node && Node->IsA<UAnimGraphNode_TransitionResult>()) { ResultNode = Node; break; }
+		}
+		if (!ResultNode) { OutError = TEXT("Transition result node not found (target a transition condition graph via from_state/to_state)"); return false; }
+		ResolvedToNodeId = ResultNode->NodeGuid.ToString();
+		if (ResolvedToPin.IsEmpty()) ResolvedToPin = TEXT("bCanEnterTransition");
+	}
+
+	return FBlueprintGraphEditor::ConnectPins(Target, FromNodeId, FromPin, ResolvedToNodeId, ResolvedToPin, OutError);
+}
+
+bool FAnimBlueprintEditor::SetGraphPinDefault(UAnimBlueprint* AnimBP, const FString& NodeId, const FString& PinName, const FString& Value,
+	const FString& StateMachine, const FString& FromState, const FString& ToState, FString& OutError)
+{
+	UEdGraph* Target = ResolveTargetGraph(AnimBP, StateMachine, FromState, ToState, OutError);
+	if (!Target) return false;
+
+	return FBlueprintGraphEditor::SetPinDefaultValue(Target, NodeId, PinName, Value, OutError);
+}
+
+bool FAnimBlueprintEditor::DeleteGraphNode(UAnimBlueprint* AnimBP, const FString& NodeId,
+	const FString& StateMachine, const FString& FromState, const FString& ToState, FString& OutError)
+{
+	UEdGraph* Target = ResolveTargetGraph(AnimBP, StateMachine, FromState, ToState, OutError);
+	if (!Target) return false;
+
+	return FBlueprintGraphEditor::DeleteNode(Target, NodeId, OutError);
+}
+
+bool FAnimBlueprintEditor::SetTransitionAutoRule(UAnimBlueprint* AnimBP, const FString& StateMachine, const FString& FromState, const FString& ToState,
+	bool bEnable, float TriggerTime, FString& OutError)
+{
+	UAnimGraphNode_StateMachine* SM = FindStateMachine(AnimBP, StateMachine, OutError);
+	if (!SM) return false;
+
+	UAnimStateTransitionNode* Trans = FindTransitionNode(SM, FromState, ToState);
+	if (!Trans)
+	{
+		OutError = FString::Printf(TEXT("Transition '%s' -> '%s' not found in state machine '%s'"), *FromState, *ToState, *StateMachine);
+		return false;
+	}
+
+	Trans->bAutomaticRuleBasedOnSequencePlayerInState = bEnable;
+	if (TriggerTime >= 0.f)
+		Trans->AutomaticRuleTriggerTime = TriggerTime;
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
 	return true;

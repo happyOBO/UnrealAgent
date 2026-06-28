@@ -17,7 +17,7 @@ struct FAnimBlueprintModifyTool : public FMcpTool
 
 	/** state machine ops, AnimGraph 노드 ops, 또는 읽기 전용 조회 */
 	UPROPERTY(meta=(ToolParam="operation", Required,
-		Description="One of: get_anim_graph, create_state_machine, add_state, add_transition, set_state_animation, set_entry_state, add_slot_node, add_layered_blend_per_bone, add_aim_offset_node, connect_anim_nodes"))
+		Description="One of: get_anim_graph, create_state_machine, add_state, add_transition, set_state_animation, set_entry_state, add_slot_node, add_layered_blend_per_bone, add_aim_offset_node, add_modify_bone, connect_anim_nodes, expose_pin, add_variable_get, add_graph_node, connect, set_pin_default, delete_node, set_transition_auto_rule"))
 	FString Operation;
 
 	/** 대상 Animation Blueprint 경로 (예: /Game/Characters/ABP_Hero) */
@@ -67,6 +67,18 @@ struct FAnimBlueprintModifyTool : public FMcpTool
 		Description="[add_aim_offset_node] AimOffset (UAimOffsetBlendSpace) asset path to play"))
 	FString AimOffsetPath;
 
+	UPROPERTY(meta=(ToolParam="bone",
+		Description="[add_modify_bone] Bone to modify (e.g. spine_01). The node's Rotation pin is shown by default."))
+	FString Bone;
+
+	UPROPERTY(meta=(ToolParam="rotation_mode",
+		Description="[add_modify_bone] Ignore|Replace|Add (default Add)"))
+	FString RotationMode;
+
+	UPROPERTY(meta=(ToolParam="rotation_space",
+		Description="[add_modify_bone] World|Component|Parent|Bone (default Component)"))
+	FString RotationSpace;
+
 	UPROPERTY(meta=(ToolParam="from_node_id",
 		Description="[connect_anim_nodes] Source node id (NodeGuid returned by add_*_node)"))
 	FString FromNodeId;
@@ -80,8 +92,48 @@ struct FAnimBlueprintModifyTool : public FMcpTool
 	FString ToNodeId;
 
 	UPROPERTY(meta=(ToolParam="to_pin",
-		Description="[connect_anim_nodes] Target input pin name (optional; default first input pin)"))
+		Description="[connect_anim_nodes/connect] Target input pin name (optional; default first input pin)"))
 	FString ToPin;
+
+	// ── 핀 노출 / 서브그래프 범용 편집 ops 파라미터 ──
+	// 범용 편집 ops(add_graph_node/connect/set_pin_default/add_variable_get)는 from_state+to_state가
+	// 둘 다 주어지면 그 전이의 조건 그래프를, 아니면 메인 AnimGraph를 편집 대상으로 합니다.
+
+	UPROPERTY(meta=(ToolParam="node_id",
+		Description="[expose_pin/set_pin_default] Target node id (NodeGuid or UA_ID)"))
+	FString NodeId;
+
+	UPROPERTY(meta=(ToolParam="pin_name",
+		Description="[expose_pin] property to expose as a pin (AimOffset: X=Yaw, Y=Pitch); [set_pin_default] input pin name"))
+	FString PinName;
+
+	UPROPERTY(meta=(ToolParam="expose",
+		Description="[expose_pin] true to expose the property as a pin, false to hide (default true)"))
+	bool bExpose = true;
+
+	UPROPERTY(meta=(ToolParam="variable",
+		Description="[add_variable_get] AnimInstance member variable to read (e.g. AimYaw)"))
+	FString Variable;
+
+	UPROPERTY(meta=(ToolParam="node_type",
+		Description="[add_graph_node] node type: CallFunction|VariableGet|Branch|Cast|... (same as blueprint_modify add_node)"))
+	FString NodeType;
+
+	UPROPERTY(meta=(ToolParam="node_params",
+		Description="[add_graph_node] JSON object string of node params (e.g. {\"function\":\"Greater_DoubleDouble\",\"target_class\":\"KismetMathLibrary\"})"))
+	FString NodeParams;
+
+	UPROPERTY(meta=(ToolParam="value",
+		Description="[set_pin_default] default value to set on the input pin"))
+	FString Value;
+
+	UPROPERTY(meta=(ToolParam="enable",
+		Description="[set_transition_auto_rule] true to enable 'transition when sequence finishes' (default true)"))
+	bool bEnable = true;
+
+	UPROPERTY(meta=(ToolParam="trigger_time",
+		Description="[set_transition_auto_rule] automatic rule trigger time in seconds; negative = leave unchanged (default -1)"))
+	float TriggerTime = -1.f;
 
 	virtual FString ToolDescription() const override;
 	virtual FMcpResponse Execute() override;

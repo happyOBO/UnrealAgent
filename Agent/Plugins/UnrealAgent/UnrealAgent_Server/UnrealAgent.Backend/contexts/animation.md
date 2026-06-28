@@ -34,10 +34,27 @@ Python cannot edit the anim BP graph. Build the state-machine skeleton with this
 - `set_state_animation` (state_machine, state_name, anim_sequence path)
 - `set_entry_state` (entry state)
 - `add_transition` (from_state, to_state; the condition graph is created empty — set the
-  condition afterward)
+  condition afterward with the generic graph ops below, or `set_transition_auto_rule`)
 
 Typical flow: `create_state_machine` → `add_state`×2 → `set_state_animation` for each state →
-`set_entry_state` → `add_transition`.
+`set_entry_state` → `add_transition` → set transition conditions.
+
+**Set transition conditions** (the condition graph is a normal K2 graph, so the same node ops
+that build event graphs work on it). Generic graph ops below target a transition's CONDITION
+graph when both `from_state` + `to_state` are given, otherwise the main AnimGraph:
+- `add_graph_node` (node_type, [node_params] JSON string) — same node_type/node_params as
+  `blueprint_modify`'s add_node (CallFunction, VariableGet, Branch, Cast, …). Returns node_id.
+- `connect` (from_node_id, to_node_id; `result` for `to` = TransitionResult's
+  `bCanEnterTransition` pin) — schema-checked, handles value pins.
+- `set_pin_default` (node_id, pin_name, value).
+- `set_transition_auto_rule` (state_machine, from_state, to_state, [enable], [trigger_time]) —
+  fire the transition when the state's sequence finishes; no condition graph needed (use for
+  turn/montage end transitions).
+
+Condition flow: `add_transition` → `add_graph_node` (VariableGet `bIsTurningInPlace`, with
+from_state/to_state) → `connect` (getter → `result`). For richer expressions add comparison
+CallFunctions (e.g. `Greater_DoubleDouble` on `KismetMathLibrary`) + `Branch`/AND and wire the
+boolean output to `result`.
 
 **Query/add AnimGraph nodes with the `anim_blueprint_modify` native tool** (not possible via
 Python).
@@ -50,7 +67,14 @@ Targets the main AnimGraph, and `add_*` returns a node id (NodeGuid):
 - `add_slot_node` (slot_name) — a montage-slot playback node
 - `add_layered_blend_per_bone` (bones: comma-separated bone names) — a per-bone layered blend node
 - `connect_anim_nodes` (from_node_id, to_node_id; giving `output`/`result` for `to` connects to
-  the Output Pose; if from_pin/to_pin are omitted, the first output/input pose pin is used)
+  the Output Pose; if from_pin/to_pin are omitted, the first output/input pose pin is used).
+  Schema-based like an editor drag: when pose pin **spaces differ** (local↔component) it
+  **auto-inserts** a `LocalToComponentSpace`/`ComponentToLocalSpace` conversion node, and it
+  replaces an existing single-parent pose link. So just connect the chain in order — you do not
+  need (and cannot manually add) the conversion nodes.
+- `delete_node` (node_id; optional from_state/to_state to target a transition condition graph) —
+  removes a node from the main AnimGraph (or condition graph). For plain nodes; not state/
+  transition nodes. Useful to clean up or recover from a mistake without reloading the package.
 
 **Edit montage slot tracks with the `montage_modify` native tool.** In Python, `SlotAnimTracks`
 is protected and blocked, so slot changes are not possible. This tool manipulates it directly in
@@ -80,12 +104,43 @@ BlendSpace).
 - Connect the base pose with `connect_anim_nodes` (the aim offset node's first input pose pin is
   the Base Pose). Connect the aim offset output on to the Output Pose or a subsequent node.
 
+**Bind the Yaw/Pitch float pins to AnimInstance variables** (e.g. AimYaw/AimPitch). The X/Y
+inputs are optional pins, so expose them first, then wire a variable getter:
+- `expose_pin` (node_id, pin_name, [expose]) — exposes the property as a graph pin. AimOffset
+  exposable pins are `X` (Yaw) and `Y` (Pitch).
+- `add_variable_get` (variable) — adds a VariableGet node for the AnimInstance member; returns
+  node_id. The getter's data output pin is named after the variable.
+- `connect` (from_node_id = getter, from_pin = variable name, to_node_id = aim node,
+  to_pin = `X`/`Y`).
+
 Typical flow: `aim_offset_modify create` → `add_sample`×N (Yaw/Pitch corners) →
 `anim_blueprint_modify add_aim_offset_node` → `connect_anim_nodes` (base pose input, and aim
-offset → output) → compile (automatic after write ops).
+offset → output) → `expose_pin` X/Y → `add_variable_get` → `connect` to the float pins →
+compile (automatic after write ops).
 
-Limits — the following are unsupported and done manually in the editor: variable binding of the
-Yaw/Pitch float pins, customizing the axis range / grid division. Report limits to the user.
+Limits — the following are still done manually in the editor: customizing the axis range / grid
+division. Report limits to the user.
+
+**Spine twist without an Aim Offset (Transform/Modify Bone).** To rotate the upper body toward a
+look/aim angle without authoring additive aim poses, use `add_modify_bone` instead of an
+AimOffset:
+- `add_modify_bone` (bone, [rotation_mode=Add], [rotation_space=Component]) — adds a
+  `UAnimGraphNode_ModifyBone`. The node's `Rotation` pin is shown by default (no expose_pin
+  needed). Returns node_id.
+- Drive its `Rotation` (an FRotator) from a float: `add_graph_node` MakeStruct (struct=`Rotator`)
+  and connect the per-bone yaw into the rotator's `Yaw` pin, then `connect` rotator → ModifyBone
+  `Rotation`.
+- Split the angle across the spine: e.g. for spine_01..spine_03 drive each with `AimYaw / 3`
+  via `add_graph_node` CallFunction `Divide_DoubleDouble` (target_class `KismetMathLibrary`) fed
+  by `add_variable_get` `AimYaw`. Pitch is analogous (rotator `Pitch`).
+
+Spine-twist flow: `add_modify_bone`(spine_01, Add, Component)×3 → for each: `add_variable_get`
+(AimYaw) → CallFunction Divide_DoubleDouble (b=3) → MakeStruct Rotator (Yaw = divide result) →
+`connect` rotator → ModifyBone Rotation → chain the ModifyBone Component Pose pins in series and
+into the Output Pose. ModifyBone is a **component-space** node; when you `connect_anim_nodes` a
+local-space pose into it (e.g. from a LayeredBoneBlend) or its output into a local-space input
+(Output Pose / Control Rig Source), the conversion node is inserted automatically — just connect
+the chain in order.
 
 Data-level work such as querying anim sequences, adding notifies, and manipulating curves is
 possible with the Python below.
