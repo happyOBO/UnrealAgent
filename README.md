@@ -1,4 +1,4 @@
-# UnrealAgent
+# UnrealAgent ( Unreal Engine 5.7.4 ver)
 
 UnrealAgent는 Unreal Editor 안에서 동작하는 AI 코딩 에이전트 플러그인이다. 에디터에 채팅
 패널을 띄우고(`Alt+F2`), 에이전트가 블루프린트·UMG 위젯·애님 그래프·레벨 액터를 직접
