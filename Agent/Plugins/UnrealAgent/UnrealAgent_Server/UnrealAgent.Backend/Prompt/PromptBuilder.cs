@@ -295,8 +295,8 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
     /// <summary>
     /// 스킬 목록을 시스템 프롬프트에 포함합니다. 스킬이 없으면 null을 반환합니다.
     /// disableModelInvocation인 스킬은 제외됩니다.
-    /// 스킬 본문 주입은 서버(SlashCommandMiddleware)가 수행하므로, 모델에는
-    /// 도구 호출이 아닌 /<skill-name> 안내만 제공합니다.
+    /// 스킬은 사용자가 /<skill-name>으로 호출하거나, 모델이 `skill` 도구(백엔드 MCP)로
+    /// 직접 호출할 수 있습니다.
     /// </summary>
     private string? SkillListing()
     {
@@ -310,12 +310,16 @@ public sealed class PromptBuilder(SkillRegistry SkillRegistry)
 
                 {Listing}
 
-                Skills are invoked by the user typing /<skill-name>. When invoked, the
-                skill's full instructions are injected into the user message — follow
-                them exactly.
-                You cannot invoke skills yourself and there is no skill tool. If the
-                user's request clearly matches a skill above, briefly suggest running
-                /<skill-name> instead of attempting the task without it.
+                Skills provide specialized capabilities and domain knowledge. There are
+                two ways a skill runs:
+                - The user types /<skill-name>, which injects the skill's full instructions
+                  into the user message.
+                - You invoke the `skill` tool with the skill name, which returns the skill's
+                  instructions for you to follow.
+
+                When the user's request clearly matches a skill above, invoke the `skill`
+                tool for it BEFORE doing the task by other means. Follow the returned
+                instructions exactly.
                 </system-reminder>
                 """;
     }

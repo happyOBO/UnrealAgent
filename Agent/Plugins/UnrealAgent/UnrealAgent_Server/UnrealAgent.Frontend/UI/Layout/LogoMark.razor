@@ -1,0 +1,17 @@
+@* UnrealAgent 로고 마크 — 아이소메트릭 3D 큐브(엔진) + 스파크(AI) 결합.
+   큐브 외곽선은 currentColor(상위 text-* 클래스로 지정), 스파크는 SparkColor로 채움. *@
+<svg viewBox="0 0 24 24" class="@Class" fill="none"
+     stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M12 3 L20.5 8 V16 L12 21 L3.5 16 V8 Z" />
+    <path d="M12 12 L20.5 8 M12 12 V21 M12 12 L3.5 8" />
+    <path d="M18.5 3.8 q0.7 1.5 2.2 2.2 q-1.5 0.7 -2.2 2.2 q-0.7 -1.5 -2.2 -2.2 q1.5 -0.7 2.2 -2.2 Z"
+          fill="@SparkColor" stroke="none" />
+</svg>
+
+@code {
+    /// <summary>크기·색(currentColor) 등을 지정하는 CSS 클래스입니다.</summary>
+    [Parameter] public string Class { get; set; } = "size-4 text-white/90";
+
+    /// <summary>스파크 채움 색입니다. 기본은 앱 액센트(언리얼 블루)입니다.</summary>
+    [Parameter] public string SparkColor { get; set; } = "#0070e0";
+}

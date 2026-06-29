@@ -1,32 +1,40 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Reflection;
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Anthropic.Models.Messages;
 using Microsoft.Extensions.DependencyInjection;
 using UnrealAgent.Backend.Tool.Attributes;
 
 namespace UnrealAgent.Backend.Tool;
-using AnthropicTool = Anthropic.Models.Messages.Tool;
 using ClrType = System.Type;
 
 /// <summary>
 /// [AgentTool] 어트리뷰트를 스캔하여 도구를 등록합니다.
 /// 도구 인스턴스는 Discovery 시 한 번 생성되어 재사용됩니다.
-/// 등록된 스키마는 토큰 사용량 측정(TokenTracker)에 사용됩니다.
+/// 등록된 도구는 백엔드 MCP 서버(BackendMcpServer)가 CLI에 노출하고 실행합니다.
 /// </summary>
 public sealed class ToolRegistry(IServiceProvider ServiceProvider)
 {
-    /// <summary>도구 인스턴스와 Claude API 스키마를 묶어 보관합니다.</summary>
-    private sealed record ToolEntry(IAgentTool Tool, AnthropicTool Schema);
+    /// <summary>MCP tools/list 응답용 도구 정의입니다.</summary>
+    public sealed record McpToolDefinition(string Name, string Description, JsonObject InputSchema);
+
+    /// <summary>도구 인스턴스와 MCP 정의를 묶어 보관합니다.</summary>
+    private sealed record ToolEntry(IAgentTool Tool, McpToolDefinition Definition);
 
     /// <summary>도구 이름 → ToolEntry 매핑입니다.</summary>
     private readonly Dictionary<string, ToolEntry> Tools = new();
-    
+
     /// <summary>
-    /// 등록된 모든 도구의 스키마를 반환합니다.
+    /// 등록된 모든 도구의 MCP 정의를 반환합니다 (tools/list 응답).
     /// </summary>
-    public IReadOnlyList<AnthropicTool> GetAllSchemas() => Tools.Values.Select(E => E.Schema).ToList();
+    public IReadOnlyList<McpToolDefinition> GetMcpDefinitions() =>
+        Tools.Values.Select(E => E.Definition).ToList();
+
+    /// <summary>
+    /// 이름으로 도구 인스턴스를 조회합니다. 없으면 null입니다.
+    /// </summary>
+    public IAgentTool? TryGetTool(string Name) =>
+        Tools.TryGetValue(Name, out ToolEntry? Entry) ? Entry.Tool : null;
 
     /// <summary>
     /// 지정된 어셈블리에서 [AgentTool] + IAgentTool 클래스를 스캔하여 등록합니다.
@@ -52,62 +60,56 @@ public sealed class ToolRegistry(IServiceProvider ServiceProvider)
                 if (ActivatorUtilities.CreateInstance(ServiceProvider, Type) is not IAgentTool Instance)
                     continue;
 
-                // AgentTool<TInput>에서 TInput 타입을 추출하여 스키마를 생성합니다.
-                AnthropicTool Schema = new()
-                {
-                    Name = Attr.Name,
-                    Description = Attr.Description,
-                    InputSchema = GenerateSchemaFromType(Type)
-                };
+                // AgentTool<TInput>에서 TInput 타입을 추출하여 MCP 입력 스키마를 생성합니다.
+                McpToolDefinition Definition = new(
+                    Attr.Name,
+                    Attr.Description,
+                    GenerateSchemaFromType(Type));
 
-                Tools[Attr.Name] = new ToolEntry(Instance, Schema);
+                Tools[Attr.Name] = new ToolEntry(Instance, Definition);
             }
         }
     }
 
     /// <summary>
-    /// AgentTool의 TInput 레코드에서 InputSchema를 자동 생성합니다.
+    /// AgentTool의 TInput 레코드에서 MCP inputSchema(JSON Schema)를 자동 생성합니다.
     /// [Description] 어트리뷰트로 파라미터 설명을, [JsonPropertyName]으로 JSON 키를 지정합니다.
+    /// 형식: {"type":"object","properties":{...},"required":[...]}
     /// </summary>
-    private static InputSchema GenerateSchemaFromType(ClrType ToolType)
+    private static JsonObject GenerateSchemaFromType(ClrType ToolType)
     {
-        ClrType? InputType = FindInputType(ToolType);
-        if (InputType is null)
-        {
-            return new InputSchema
-            {
-                Properties = new Dictionary<string, JsonElement>(),
-                Required = new List<string>()
-            };
-        }
-        
-        Dictionary<string, JsonElement> Properties = new();
-        List<string> Required = [];
+        JsonObject Properties = new();
+        JsonArray Required = [];
 
-        foreach (PropertyInfo Prop in InputType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        ClrType? InputType = FindInputType(ToolType);
+        if (InputType is not null)
         {
-            // JSON 키: [JsonPropertyName]이 있으면 사용, 없으면 camelCase
-            string JsonName = Prop.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name
-                              ?? char.ToLowerInvariant(Prop.Name[0]) + Prop.Name[1..];
-            
-            string Description = Prop.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
-            string TypeName = GetJsonSchemaType(Prop.PropertyType);
-            
-            
-            Dictionary<string, string> Schema = new()
+            foreach (PropertyInfo Prop in InputType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                ["type"] = TypeName,
-                ["description"] = Description
-            };
-            
-            Properties[JsonName] = JsonSerializer.SerializeToElement(Schema);
-            
-            // Nullable이 아닌 프로퍼티는 required로 등록합니다.
-            if (!IsNullable(Prop))
-                Required.Add(JsonName);
+                // JSON 키: [JsonPropertyName]이 있으면 사용, 없으면 camelCase
+                string JsonName = Prop.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name
+                                  ?? char.ToLowerInvariant(Prop.Name[0]) + Prop.Name[1..];
+
+                string Description = Prop.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
+
+                Properties[JsonName] = new JsonObject
+                {
+                    ["type"] = GetJsonSchemaType(Prop.PropertyType),
+                    ["description"] = Description
+                };
+
+                // Nullable이 아닌 프로퍼티는 required로 등록합니다.
+                if (!IsNullable(Prop))
+                    Required.Add(JsonName);
+            }
         }
-        
-        return new InputSchema { Properties = Properties, Required = Required };
+
+        return new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = Properties,
+            ["required"] = Required
+        };
     }
 
     /// <summary>AgentTool 상속 체인에서 TInput 타입을 추출합니다.</summary>
@@ -129,7 +131,7 @@ public sealed class ToolRegistry(IServiceProvider ServiceProvider)
         // 상속 체인에 AgentTool<>이 없으면 null
         return null;
     }
-    
+
     /// <summary>C# 타입을 JSON Schema 타입 문자열로 변환합니다.</summary>
     private static string GetJsonSchemaType(ClrType ClrType)
     {
@@ -144,7 +146,7 @@ public sealed class ToolRegistry(IServiceProvider ServiceProvider)
 
         return "object";
     }
-    
+
     /// <summary>프로퍼티가 nullable인지 확인합니다. 참조 타입도 string vs string? 구분 가능.</summary>
     private static bool IsNullable(PropertyInfo Prop)
     {

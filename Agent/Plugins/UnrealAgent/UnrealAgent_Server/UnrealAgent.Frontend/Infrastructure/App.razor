@@ -74,6 +74,50 @@
     <!-- Blazor SignalR 연결 스크립트 -->
     <script src="_framework/blazor.web.js"></script>
 
+    <!-- 연결 상태 점 구동: Blazor 재연결 모달(#components-reconnect-modal) 클래스를 감지해 헤더 점 색/툴팁 토글 -->
+    <!-- 회로가 끊겨도 동작하도록 순수 JS로 구현(.NET 렌더링 비의존) -->
+    <script>
+    (function () {
+        const states = {
+            connected:    { cls: "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]", label: "연결됨" },
+            reconnecting: { cls: "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.6)] animate-pulse", label: "재연결 중…" },
+            disconnected: { cls: "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]", label: "연결 끊김" }
+        };
+        const base = "size-2 rounded-full transition-colors ";
+        function apply(state) {
+            const dot = document.getElementById("conn-dot");
+            const label = document.getElementById("conn-dot-label");
+            if (!dot) return;
+            const s = states[state] || states.connected;
+            dot.className = base + s.cls;
+            if (label) label.textContent = s.label;
+        }
+        function modalState(modal) {
+            if (!modal) return "connected";
+            const c = modal.classList;
+            if (c.contains("components-reconnect-failed") || c.contains("components-reconnect-rejected")) return "disconnected";
+            if (c.contains("components-reconnect-show") || c.contains("components-reconnect-reconnecting")) return "reconnecting";
+            return "connected";
+        }
+        function watch() {
+            const modal = document.getElementById("components-reconnect-modal");
+            apply(modalState(modal));
+            if (modal) {
+                new MutationObserver(() => apply(modalState(modal)))
+                    .observe(modal, { attributes: true, attributeFilter: ["class"] });
+            } else {
+                // 모달이 아직 생성되지 않았으면 잠시 후 재시도
+                setTimeout(watch, 1000);
+            }
+        }
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", watch);
+        } else {
+            watch();
+        }
+    })();
+    </script>
+
 </body>
 </html>
 

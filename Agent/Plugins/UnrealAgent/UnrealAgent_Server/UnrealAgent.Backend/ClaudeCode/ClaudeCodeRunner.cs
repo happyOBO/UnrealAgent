@@ -234,9 +234,7 @@ public sealed class ClaudeCodeRunner(string CliPath) : IAsyncDisposable
         foreach (string Arg in Args)
             Psi.ArgumentList.Add(Arg);
 
-        // 인증: API 키가 있으면 주입, 없으면 claude 로그인 자격증명 사용
-        if (!string.IsNullOrEmpty(Options.ApiKey))
-            Psi.Environment["ANTHROPIC_API_KEY"] = Options.ApiKey;
+        // 인증: claude 로그인 자격증명(구독)을 사용합니다.
 
         // 확장 사고 비활성화 매핑 (effort와 별개의 근사 매핑)
         if (!Options.ThinkingEnabled)

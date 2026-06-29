@@ -1,27 +1,26 @@
 using Microsoft.AspNetCore.Components;
 using UnrealAgent.Backend.Model;
-using UnrealAgent.Backend.Token;
 using UnrealAgent.Frontend.Infrastructure;
 
 namespace UnrealAgent.Frontend.UI.Input;
 
 public partial class TokenMeter
 {
-    /// <summary>토큰 추적기 입니다.</summary>
-    [Inject] private TokenTracker TokenTracker { get; set; } = null!;
-
-    /// <summary>모델 설정입니다.</summary>
+    /// <summary>모델 설정입니다 (컨텍스트 윈도우 조회).</summary>
     [Inject] private ModelSettings ModelSettings { get; set; } = null!;
-    
+
     /// <summary>현재 컨텍스트 토큰 수입니다. 부모에서 전달받아 변경 시 re-render를 트리거합니다.</summary>
     [Parameter] public long ContextTokens { get; set; }
 
-    /// <summary>카테고리별 컨텍스트 사용량입니다.</summary>
-    private TokenUsage Usage => TokenTracker.GetTokenUsage(ContextTokens);
-    
-    /// <summary>현재 컨텍스트 사용률입니다.</summary>
-    private double UsagePercent => Usage.UsagePercent;
-    
+    /// <summary>컨텍스트 윈도우 크기입니다. 모델에 따라 달라집니다.</summary>
+    private long ContextWindow => ModelSettings.ContextWindow;
+
+    /// <summary>남은 토큰 수입니다. 입력이 윈도우를 초과해도 0에서 멈춥니다.</summary>
+    private long FreeSpace => Math.Max(0, ContextWindow - ContextTokens);
+
+    /// <summary>현재 컨텍스트 사용률(0~100)입니다.</summary>
+    private double UsagePercent => ContextWindow > 0 ? (double)ContextTokens / ContextWindow * 100 : 0;
+
     /// <summary>퍼센트 텍스트 색상입니다. 40% 이하 녹색, 70% 이하 주황, 초과 시 빨강입니다.</summary>
     private string PercentColorClass => UsagePercent switch
     {
@@ -32,7 +31,7 @@ public partial class TokenMeter
 
     /// <summary>70% 초과 시 pulse 애니메이션을 추가합니다.</summary>
     private string PercentAnimClass => UsagePercent > 70 ? "animate-pulse" : "";
-    
+
     /// <summary>바 색상입니다.</summary>
     private string BarColorClass => UsagePercent switch
     {
@@ -56,15 +55,15 @@ public partial class TokenMeter
         >= 1_000 => $"{Tokens / 1_000.0:F1}k",
         _ => Tokens.ToString()
     };
-    
+
     /// <summary>토큰 수와 컨텍스트 윈도우 대비 퍼센트를 함께 표시합니다.</summary>
     private string FormatTokensWithPct(long Tokens)
     {
         string Formatted = FormatTokens(Tokens);
-        if (ModelSettings.ContextWindow <= 0) 
+        if (ContextWindow <= 0)
             return Formatted;
-        
-        double Percent = (double)Tokens / ModelSettings.ContextWindow * 100;
+
+        double Percent = (double)Tokens / ContextWindow * 100;
         return $"{Formatted} ({Percent:F1}%)";
     }
 }

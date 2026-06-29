@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using UnrealAgent.Backend.Auth;
 using UnrealAgent.Backend.Chat;
 using UnrealAgent.Backend.ClaudeCode;
 using UnrealAgent.Backend.Conversation;
@@ -21,7 +20,6 @@ public sealed class AgentLoop(
     ModelSettings ModelSettings,
     ClaudeCliLocator Locator,
     CliMcpConfig McpConfig,
-    AuthConfig Auth,
     ContextRegistry ContextRegistry)
 {
     /// <summary>
@@ -94,7 +92,6 @@ public sealed class AgentLoop(
             McpConfigPath = McpConfig.Path,
             ResumeSessionId = Session.ClaudeSessionId,
             WorkingDirectory = string.IsNullOrEmpty(AgentPaths.RootPath) ? null : AgentPaths.RootPath,
-            ApiKey = Auth.ApiKey,
             AllowCliSlashCommands = Input.bCliCommand,
         };
 

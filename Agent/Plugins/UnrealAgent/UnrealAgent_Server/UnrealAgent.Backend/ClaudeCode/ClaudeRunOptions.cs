@@ -32,9 +32,6 @@ public sealed class ClaudeRunOptions
     /// <summary>작업 디렉터리입니다 (UE 프로젝트 루트).</summary>
     public string? WorkingDirectory { get; init; }
 
-    /// <summary>API 키입니다. null이면 claude 로그인 자격증명을 사용합니다.</summary>
-    public string? ApiKey { get; init; }
-
     /// <summary>
     /// CLI 내장 슬래시 커맨드 허용 여부입니다. 평소에는 false로 사용자 개인
     /// 스킬/커맨드 오염을 차단하고, /compact 위임 턴에만 true로 켭니다.
