@@ -3,5 +3,18 @@
     "allow": [
       "Bash(claude -p --system-prompt-file /tmp/sp.txt --model claude-haiku-4-5-20251001)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/.claude/hooks/p4-checkout.ps1\""
+          }
+        ]
+      }
+    ]
   }
 }
